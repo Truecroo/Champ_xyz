@@ -145,7 +145,11 @@ $('#button_loader').on('click', async function(){
     }, 1200);
     $('#permission-screen').fadeOut('slow');
     startApp();
-  } catch(err){ console.error(err); alert('Camera access denied. Please enable camera permissions.'); buttonclicked = false; }
+  } } catch(err){
+  alert(`Camera error: ${err.name} — ${err.message}`);
+  console.error(err);
+}
+ }
 });
 
 // ===== PoseNet callbacks =====
