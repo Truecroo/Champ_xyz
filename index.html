@@ -189,7 +189,7 @@ function shuffleCubes(){
 
 /* ===== PoseNet ===== */
 function startPoseNet(){
-  const net = ml5.poseNet(video, ()=> log('PoseNet готов'));
+  const net = ml5.poseNet(video, { flipHorizontal: false }, ()=> log('PoseNet готов'));
   net.on('pose', (res)=>{
     if(!res.length) return;
     const k = res[0].pose.keypoints;
