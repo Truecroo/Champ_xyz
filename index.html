@@ -21,9 +21,9 @@
   <style>
     body { margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     #permission-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#000; z-index:10; padding:24px; text-align:center; }
-    #button_loader, .downloadButton, .questionButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
+    #button_loader, .downloadButton, .questionButton, .modeButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
     #container { position:fixed; inset:0; display:none; }
-    #about { position:fixed; right:12px; bottom:12px; }
+    #about { position:fixed; right:12px; bottom:12px; display:flex; gap:8px; align-items:center; }
     #aboutText { display:none; position:fixed; right:12px; bottom:60px; width:260px; background:rgba(0,0,0,.7); padding:12px; border-radius:8px; }
     #download_div { position:fixed; left:12px; bottom:12px; display:none; }
     #discription { position:fixed; top:12px; left:12px; background:rgba(0,0,0,.35); padding:8px 10px; border-radius:8px; }
@@ -32,6 +32,7 @@
     video { opacity:0; width:0; height:0; position:absolute; left:-9999px; }
     canvas { image-rendering:auto; }
     a { color:#9ad1ff; }
+    .pill { font-size:12px; opacity:.85; border:1px solid #444; padding:6px 10px; border-radius:999px; }
   </style>
 </head>
 
@@ -64,16 +65,18 @@
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">тап — меняет композицию • свайп — меняет план</div>
+  <div id="discription">тап — <span id="hintAction">листать пресеты</span> • свайп — менять план</div>
 
   <div id="about">
+    <button class="modeButton" id="modeToggle">Режим: Пресеты</button>
+    <span class="pill" id="modeHint">тап = листать пресеты</span>
+    <button class="questionButton" id="aboutButton">Инфо</button>
     <div id="aboutText">
       <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
-        Технологии: <a href="https://threejs.org/">Three.js</a>, <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a> и <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
+        Технологии: <a href="https://threejs.org/">Three.js</a>, <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>, <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
       </p>
     </div>
-    <button class="questionButton" id="aboutButton">Инфо</button>
   </div>
 
   <div id="download_div">
@@ -93,6 +96,7 @@
   const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
 
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const rand=(a,b)=>Math.random()*(b-a)+a;
 
   // ===== Three.js =====
   let scene, renderer;
@@ -107,14 +111,12 @@
   ];
   let presetIndex = 0;
 
+  // Режим перемещения: false = пресеты, true = рандом
+  let randomMode = false;
+
   // ===== Лендмарки/боксы =====
-  let faceMeshReady = false;
   let firstPredictionCame = false;
-
-  // боксы от FaceMesh:
   window._bbNose = null; window._bbLEye = null; window._bbREye = null; window._bbMouth = null;
-
-  // PoseNet (fallback) значения:
   let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 
   // ===== UI =====
@@ -129,6 +131,13 @@
   });
   $("#container, #discription").on('touchstart mousedown', function(){ $("#discription").fadeOut('fast'); });
 
+  $("#modeToggle").on("click", ()=>{
+    randomMode = !randomMode;
+    $("#modeToggle").text(`Режим: ${randomMode ? 'Рандом' : 'Пресеты'}`);
+    $("#modeHint").text(randomMode ? 'тап = перемешать кубы' : 'тап = листать пресеты');
+    $("#hintAction").text(randomMode ? 'перемешивать' : 'листать пресеты');
+  });
+
   // ===== Камера + ошибки =====
   async function askCamera() {
     try {
@@ -138,7 +147,6 @@
       if (video.readyState < 1) await new Promise(r => (video.onloadedmetadata = r));
       await video.play();
 
-      // зафиксировать реальные размеры под кроп
       await new Promise(r=>setTimeout(r,50));
       video.width  = video.videoWidth  || 480;
       video.height = video.videoHeight || 640;
@@ -173,13 +181,13 @@
     $("#loading-screen").fadeOut('fast');
 
     initThree();
-    bootTrackers();   // FaceMesh (нативно) + PoseNet (fallback)
+    bootTrackers();   // FaceMesh + PoseNet
     animate();
   });
 
-  // ===== Инициализация трекеров =====
+  // ===== Трекеры =====
   function bootTrackers(){
-    // 1) MediaPipe FaceMesh — основной
+    // MediaPipe FaceMesh
     try {
       const fm = new FaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
@@ -191,42 +199,30 @@
         minTrackingConfidence: 0.5
       });
       fm.onResults(onFaceMeshResults);
-      faceMeshReady = true;
-
-      // собственный «пульс» вызовов — без camera_utils, чтобы не ломать наш поток
       let busy = false;
-      async function pump() {
-        if (faceMeshReady && !busy && video.videoWidth) {
+      (function pump(){
+        if (!busy && video.videoWidth){
           busy = true;
-          try { await fm.send({ image: video }); } catch(_) {}
-          busy = false;
+          fm.send({ image: video }).catch(()=>{}).finally(()=>{ busy=false; });
         }
         requestAnimationFrame(pump);
-      }
-      pump();
+      })();
       console.log('FaceMesh запущен');
-    } catch(e) {
-      console.warn('FaceMesh не запустился:', e);
-      faceMeshReady = false;
-    }
+    } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
-    // 2) ml5 PoseNet — бэкап
+    // PoseNet fallback
     try {
       const net = ml5.poseNet(video, () => console.log('PoseNet готов'));
       net.on('pose', onPoseNetResults);
-    } catch(e) {
-      console.warn('PoseNet не запустился:', e);
-    }
+    } catch(e) { console.warn('PoseNet не запустился:', e); }
   }
 
-  // ===== Обработчик FaceMesh
   function onFaceMeshResults(res){
     const faces = res.multiFaceLandmarks || [];
     if (!faces.length) return;
     firstPredictionCame = true;
 
-    const pts = faces[0]; // массив из 468 точек с x,y,z в нормированных долях кадра
-    // Индексы (аналогично твоим наборам)
+    const pts = faces[0];
     const IDX = {
       leftEye:  [33,133,160,159,158,157,173],
       rightEye: [362,263,387,386,385,384,398],
@@ -237,10 +233,8 @@
     function bboxNorm(idxs){
       let minX=1,minY=1,maxX=0,maxY=0;
       for (const i of idxs){
-        const p = pts[i]; if(!p) continue;
-        const x = p.x, y = p.y; // уже 0..1
-        if (x<minX) minX=x; if (y<minY) minY=y;
-        if (x>maxX) maxX=x; if (y>maxY) maxY=y;
+        const p=pts[i]; if(!p) continue; const x=p.x,y=p.y;
+        if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
       }
       return {x:minX, y:minY, w:Math.max(1e-3,maxX-minX), h:Math.max(1e-3,maxY-minY)};
     }
@@ -260,7 +254,6 @@
     window._bbMouth = toPixels(bboxNorm(IDX.mouth),    0.05);
   }
 
-  // ===== Обработчик PoseNet (fallback как в исходнике)
   function onPoseNetResults(res){
     if (!res || !res.length) return;
     const k = res[0].pose.keypoints;
@@ -278,7 +271,6 @@
 
     const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
     const sz = Math.max(40, Math.min(300, d));
-    // Используем PoseNet-боксы только если FaceMesh пока не дал результатов
     if (!firstPredictionCame) {
       window._bbNose  = makeBox(noseX, noseY, sz);
       window._bbLEye  = makeBox(leX,   leY,   sz);
@@ -287,7 +279,7 @@
     }
   }
 
-  // ===== Three setup (без OrbitControls)
+  // ===== Three setup (без OrbitControls) =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -347,6 +339,31 @@
     [cube01, cube02, cube03, cube04].forEach(c=>c.rotation.set(0,0,0));
   }
 
+  // Рандом как в оригинале: повороты + координаты, пока все попарные расстояния >=100
+  function changePosition(){
+    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
+    const p01=cube01.position, p02=cube02.position, p03=cube03.position, p04=cube04.position;
+    const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    do{
+      cube01.rotation.y  = rand(0.1,0.5);
+      cube02.rotation.y  = rand(0.1,0.5);
+      cube03.rotation.y  = rand(0.1,0.5);
+      cube04.rotation.y  = rand(0.1,0.5);
+
+      cube01.position.set(rand(-55,55),  rand(-140,140), 0);
+      cube02.position.set(rand(-50,50),  rand(-150,150), 0);
+      cube03.position.set(rand(-50,50),  rand(-150,150), 0);
+      cube04.position.set(rand(-45,45),  rand(-155,155), 0);
+
+      d1=F(cube01.position,cube02.position);
+      d2=F(cube02.position,cube03.position);
+      d3=F(cube01.position,cube03.position);
+      d4=F(cube03.position,cube04.position);
+      d5=F(cube02.position,cube04.position);
+      d6=F(cube01.position,cube04.position);
+    } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
+  }
+
   function onResize(){
     const w = window.innerWidth, h = window.innerHeight, aspect = w/h;
     camera.aspect = aspect; camera.updateProjectionMatrix();
@@ -370,8 +387,13 @@
     const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
                        y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
     if (inDownload || inAbout) return;
-    presetIndex = (presetIndex + 1) % presets.length;
-    applyPreset(presetIndex);
+
+    if (randomMode) {
+      changePosition();
+    } else {
+      presetIndex = (presetIndex + 1) % presets.length;
+      applyPreset(presetIndex);
+    }
   }
 
   function togglePlan(dx){
@@ -400,7 +422,6 @@
   function animate(){
     requestAnimationFrame(animate);
 
-    // Если есть боксы — режем; иначе весь кадр (кубы видны сразу)
     const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
     if (hasLM) {
       drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
