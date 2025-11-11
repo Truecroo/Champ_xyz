@@ -8,7 +8,7 @@
   <!-- jQuery -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
-  <!-- THREE.js (фиксированная версия) -->
+  <!-- THREE.js (фиксированные версии) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
 
@@ -17,7 +17,7 @@
   <script src="https://unpkg.com/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
-  <!-- Опционально (как в оригинале) -->
+  <!-- Опционально, не критично -->
   <script src="https://cdn.jsdelivr.net/npm/ismobilejs@1/dist/isMobile.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.min.js"></script>
 
@@ -35,7 +35,7 @@
     #loading-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:9; }
     #loading_gif { width:120px; height:120px; opacity:.8; }
     video { opacity:0; width:0; height:0; position:absolute; left:-9999px; }
-    canvas { image-rendering: auto; }
+    canvas { image-rendering:auto; }
     a { color:#9ad1ff; }
   </style>
 </head>
@@ -43,18 +43,18 @@
 <body>
 
   <div id="loading-screen" class="wrapper">
-    <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…">
+    <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…" />
   </div>
 
   <section id="permission-screen">
     <div id="loader">
-      <strong>Нужно разрешение на камеру</strong><br>
-      Нажми «Продолжить» и в диалоге браузера выбери «Разрешить».<br>
+      <strong>Нужно разрешение на камеру</strong><br />
+      Нажми «Продолжить» и в диалоге браузера выбери «Разрешить».<br />
       Видео никуда не сохраняется.
     </div>
     <button id="button_loader">Продолжить</button>
     <div style="opacity:.6; font-size:13px;">
-      Если видишь ошибку «доступ запрещён» — открой настройки сайта в адресной строке и разреши камеру.
+      Если видишь «доступ запрещён» — открой настройки сайта в адресной строке и разреши камеру.
     </div>
   </section>
 
@@ -68,21 +68,14 @@
 
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">
-    тап — меняет композицию • свайп — меняет план
-  </div>
-
-  <div id="frame">
-    <p class="desktop_view">Проект лучше смотреть на телефоне</p>
-  </div>
+  <div id="discription">тап — меняет композицию • свайп — меняет план</div>
+  <div id="frame"><p class="desktop_view">Проект лучше смотреть на телефоне</p></div>
 
   <div id="about">
     <div id="aboutText">
-      <p class="explain">
-        <b>Куб-селфи</b> — эксперимент с 3D-рендерингом и детекцией лица. Играй перспективой и находи лучший ракурс.
-      </p>
+      <p class="explain"><b>Куб-селфи</b> — эксперимент с 3D и детекцией лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
-        Технологии: <a href="https://threejs.org/">Three.js</a> и <a href="https://learn.ml5js.org/#/reference/facemesh">ml5 FaceMesh</a><br><br>
+        Технологии: <a href="https://threejs.org/">Three.js</a> и <a href="https://learn.ml5js.org/#/reference/facemesh">ml5 FaceMesh</a><br /><br />
         Сборка: команда Егора ✦
       </p>
     </div>
@@ -96,6 +89,16 @@
 <script>
   // ===== DOM =====
   const video = document.getElementById("video");
+  video.setAttribute('playsinline','true');
+  video.setAttribute('muted','true');
+  video.muted = true;
+  video.addEventListener('loadedmetadata', () => {
+    if (video.videoWidth && video.videoHeight) {
+      video.width  = video.videoWidth;
+      video.height = video.videoHeight;
+    }
+  });
+
   const nose_canvas  = document.getElementById("canvas04"); const ctxNose  = nose_canvas.getContext("2d");
   const left_canvas  = document.getElementById("Mycanvas"); const ctxLEye  = left_canvas.getContext("2d");
   const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
@@ -104,14 +107,14 @@
   // ===== Three.js =====
   let scene, renderer, controls;
   let camera, orthoCamera, activeCamera, isOrtho = false;
-  let cube01, cube02, cube03, cube04; // nose, left, right, mouth
+  let cube01, cube02, cube03, cube04; // нос, левый, правый, рот
   const FIXED_Z = 0;
 
-  // Пресеты аккуратных позиций (x,y) — можно дополнять
+  // Аккуратные пресеты (x,y)
   const presets = [
     { nose:[  30,-130], lEye:[-30, -30], rEye:[ 50,  80], mouth:[-40, 100] },
     { nose:[   0, -90], lEye:[-60, -40], rEye:[ 60, -40], mouth:[  0, 110] },
-    { nose:[ -20,-120], lEye:[-70,  10], rEye:[ 40,  40], mouth:[-10, 120] },
+    { nose:[ -20,-120], lEye:[-70,  10], rEye:[ 40,  40], mouth:[-10, 120] }
   ];
   let presetIndex = 0;
 
@@ -141,40 +144,29 @@
 
   $("#container, #discription").on('touchstart mousedown', function(){ $("#discription").fadeOut('fast'); });
 
-  // ===== Камера: запрос с хэндлером ошибок на русском =====
+  // ===== Камера с детальным хэндлером ошибок =====
   async function askCamera() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: false
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
       video.srcObject = stream;
       await video.play();
       return true;
     } catch (err) {
       console.error('[getUserMedia error]', err.name, err.message);
-
       const hints = {
-        NotAllowedError:
-          'Доступ к камере запрещён для этого сайта. Открой настройки сайта в адресной строке и разреши камеру, затем перезагрузи страницу.',
-        NotFoundError:
-          'Камера не найдена. Подключи камеру или выбери её в настройках системы/браузера.',
-        NotReadableError:
-          'Камера занята другим приложением. Закрой другие приложения, которые используют камеру, и попробуй снова.',
-        OverconstrainedError:
-          'Запрошенные параметры камеры недоступны. Попробуй стандартный режим без нестандартных ограничений.',
-        SecurityError:
-          'Страница должна быть открыта по HTTPS (или на http://localhost). Проверь адрес.',
-        TypeError:
-          'Неверные параметры запроса к камере. Обнови страницу и попробуй ещё раз.'
+        NotAllowedError:    'Доступ к камере запрещён для этого сайта. Разреши камеру в настройках сайта и перезагрузи страницу.',
+        NotFoundError:      'Камера не найдена. Подключи камеру или выбери её в настройках системы/браузера.',
+        NotReadableError:   'Камера занята другим приложением. Закрой приложения, использующие камеру, и попробуй снова.',
+        OverconstrainedError:'Выбранные параметры камеры недоступны. Попробуй стандартный режим.',
+        SecurityError:      'Страница должна быть открыта по HTTPS (или на http://localhost). Проверь адрес.',
+        TypeError:          'Неверные параметры запроса к камере. Обнови страницу и попробуй ещё раз.'
       };
-
       alert(hints[err.name] || ('Ошибка камеры: ' + err.message));
       return false;
     }
   }
 
-  // Кнопка «Продолжить»
+  // ===== Кнопка «Продолжить» =====
   let faceMesh, firstPredictionCame = false;
   $("#button_loader").on("click", async function(){
     $("#permission-screen").fadeOut('slow');
@@ -187,44 +179,45 @@
       return;
     }
 
-    // Запускаем FaceMesh
-    faceMesh = ml5.faceMesh(video, () => console.log("FaceMesh готов"));
-    faceMesh.on("predict", gotFaces);
-
-    // Показываем сцену/кнопки
+    // Видео уже играет — показываем сцену и сразу скрываем лоадер
     $("#container").fadeIn('slow');
     $("#download_div").fadeIn('slow');
     $("#aboutButton").fadeIn('slow');
+    $("#loading-screen").fadeOut('fast');
+
+    // Инициализируем FaceMesh (не блокируем UI, если он не ответит)
+    try {
+      if (!ml5 || !ml5.faceMesh) throw new Error("ml5.faceMesh недоступен");
+      faceMesh = ml5.faceMesh(video, () => console.log("FaceMesh готов"));
+      faceMesh.on("predict", gotFaces);
+    } catch (e) {
+      console.warn("FaceMesh не инициализировался:", e);
+    }
+
+    // Форс-таймер: если нет ни одного предикта >5с — просто продолжаем без трекинга
+    setTimeout(() => {
+      if (!firstPredictionCame) console.warn("Нет предиктов FaceMesh >5с. Работаем без трекинга.");
+    }, 5000);
   });
 
   // ===== FaceMesh → bbox =====
   function gotFaces(results) {
     if (!results || results.length === 0) return;
-
-    if (!firstPredictionCame) {
-      firstPredictionCame = true;
-      $("#loading-screen").fadeOut('fast');
-    }
+    if (!firstPredictionCame) firstPredictionCame = true;
 
     const pts = results[0].scaledMesh;
+    const leftEyeIdx = [33,133,160,159,158,157,173];
+    const rightEyeIdx= [362,263,387,386,385,384,398];
+    const noseIdx    = [1,6,197,195,5,4,45];
+    const mouthIdx   = [78,95,88,178,87,14,317,308,324];
 
-    const leftEyeIdx = [33, 133, 160, 159, 158, 157, 173];
-    const rightEyeIdx= [362, 263, 387, 386, 385, 384, 398];
-    const noseIdx    = [1, 6, 197, 195, 5, 4, 45];
-    const mouthIdx   = [78, 95, 88, 178, 87, 14, 317, 308, 324];
-
-    function bbox(idxs) {
-      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-      for (const i of idxs) {
-        const p = pts[i];
-        if (!p) continue;
-        const x = p[0], y = p[1];
-        if (x < minX) minX = x; if (y < minY) minY = y;
-        if (x > maxX) maxX = x; if (y > maxY) maxY = y;
-      }
-      return { x:minX, y:minY, w:Math.max(1, maxX-minX), h:Math.max(1, maxY-minY) };
+    function bbox(idxs){
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      for(const i of idxs){ const p=pts[i]; if(!p) continue; const x=p[0],y=p[1];
+        if(x<minX) minX=x; if(y<minY) minY=y; if(x>maxX) maxX=x; if(y>maxY) maxY=y; }
+      return {x:minX,y:minY,w:Math.max(1,maxX-minX),h:Math.max(1,maxY-minY)};
     }
-    function pad(b, p=10){ return { x:b.x-p, y:b.y-p, w:b.w+2*p, h:b.h+2*p }; }
+    function pad(b,p=10){ return {x:b.x-p,y:b.y-p,w:b.w+2*p,h:b.h+2*p}; }
 
     window._bbNose  = pad(bbox(noseIdx), 10);
     window._bbLEye  = pad(bbox(leftEyeIdx), 10);
@@ -240,7 +233,7 @@
   initThree();
   animate();
 
-  function initThree() {
+  function initThree(){
     scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
 
@@ -255,7 +248,7 @@
 
     // Камеры: перспектива + ортографическая
     camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
-    camera.position.set(0, 0, 281);
+    camera.position.set(0,0,281);
 
     const frustumSize = 400;
     orthoCamera = new THREE.OrthographicCamera(
@@ -282,7 +275,7 @@
     dir.castShadow = true;
     scene.add(dir);
 
-    // Текстуры из канвасов
+    // Текстуры с канвасов
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
@@ -298,12 +291,12 @@
     const gEye   = new THREE.BoxGeometry(50, 50, 50);
     const gMouth = new THREE.BoxGeometry(100, 45, 45);
 
-    cube01 = new THREE.Mesh(gNose,  matNose);  // нос
-    cube02 = new THREE.Mesh(gEye,   matLEye);  // левый глаз
-    cube03 = new THREE.Mesh(gEye,   matREye);  // правый глаз
-    cube04 = new THREE.Mesh(gMouth, matMouth); // рот
+    cube01 = new THREE.Mesh(gNose,  matNose);   // нос
+    cube02 = new THREE.Mesh(gEye,   matLEye);   // левый глаз
+    cube03 = new THREE.Mesh(gEye,   matREye);   // правый глаз
+    cube04 = new THREE.Mesh(gMouth, matMouth);  // рот
 
-    [cube01, cube02, cube03, cube04].forEach(c => {
+    [cube01, cube02, cube03, cube04].forEach(c=>{
       c.rotation.set(0,0,0);
       c.position.z = FIXED_Z;
       scene.add(c);
@@ -313,32 +306,31 @@
     window.addEventListener('resize', onResize);
   }
 
-  function applyPreset(i) {
+  function applyPreset(i){
     const p = presets[i];
     cube01.position.set(p.nose[0],  p.nose[1],  FIXED_Z);
     cube02.position.set(p.lEye[0],  p.lEye[1],  FIXED_Z);
     cube03.position.set(p.rEye[0],  p.rEye[1],  FIXED_Z);
     cube04.position.set(p.mouth[0], p.mouth[1], FIXED_Z);
-    [cube01, cube02, cube03, cube04].forEach(c => c.rotation.set(0,0,0));
+    [cube01, cube02, cube03, cube04].forEach(c=>c.rotation.set(0,0,0));
   }
 
-  function onResize() {
+  function onResize(){
     const w = window.innerWidth, h = window.innerHeight, aspect = w/h;
-    camera.aspect = aspect;
-    camera.updateProjectionMatrix();
+    camera.aspect = aspect; camera.updateProjectionMatrix();
 
     const frustumSize = 400;
     orthoCamera.left = -frustumSize*aspect/2;
-    orthoCamera.right = frustumSize*aspect/2;
-    orthoCamera.top = frustumSize/2;
+    orthoCamera.right =  frustumSize*aspect/2;
+    orthoCamera.top =    frustumSize/2;
     orthoCamera.bottom = -frustumSize/2;
     orthoCamera.updateProjectionMatrix();
 
-    renderer.setSize(w, h);
+    renderer.setSize(w,h);
   }
 
   // ===== Рендер из видео в канвасы =====
-  function safeDraw(dstCtx, b, dw, dh) {
+  function safeDraw(dstCtx, b, dw, dh){
     if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) return;
     const sx = Math.max(0, b.x);
     const sy = Math.max(0, b.y);
@@ -346,45 +338,44 @@
     const sh = Math.max(1, b.h);
     try {
       dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-    } catch(e) { /* иногда размеры ещё не готовы — тихо пропускаем */ }
+    } catch(e) { /* иногда размеры ещё не готовы — пропускаем */ }
   }
 
   // ===== Жесты: тап / свайп =====
-  document.addEventListener('pointerdown', () => { drag = false; }, {passive:true});
-  document.addEventListener('pointermove',  () => { drag = true;  }, {passive:true});
-  document.addEventListener('pointerup',    (e) => { if (!drag) onTap(e); }, {passive:true});
+  document.addEventListener('pointerdown', ()=>{ drag=false; }, {passive:true});
+  document.addEventListener('pointermove',  ()=>{ drag=true;  }, {passive:true});
+  document.addEventListener('pointerup',    (e)=>{ if(!drag) onTap(e); }, {passive:true});
 
-  document.addEventListener('touchstart', (e) => {
-    drag = false;
+  document.addEventListener('touchstart', (e)=>{
+    drag=false;
     const t = e.touches[0];
     touchStartX = t.clientX; touchStartY = t.clientY;
   }, {passive:true});
 
-  document.addEventListener('touchmove', () => { drag = true; }, {passive:true});
+  document.addEventListener('touchmove', ()=>{ drag=true; }, {passive:true});
 
-  document.addEventListener('touchend', (e) => {
-    if (!drag) { onTap(e.changedTouches ? e.changedTouches[0] : e); return; }
+  document.addEventListener('touchend', (e)=>{
+    if(!drag){ onTap(e.changedTouches ? e.changedTouches[0] : e); return; }
     const dx = (e.changedTouches[0].clientX - touchStartX);
-    if (Math.abs(dx) > 40) togglePlan(dx);
+    if(Math.abs(dx)>40) togglePlan(dx);
   }, {passive:true});
 
-  function onTap(e) {
+  function onTap(e){
     const downloadRect = document.getElementById("download_div").getBoundingClientRect();
     const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
     const x = e.pageX || e.clientX, y = e.pageY || e.clientY;
 
     const inDownload = x >= downloadRect.left-5 && x <= downloadRect.right+5 &&
-                       y >= downloadRect.top-5     && y <= downloadRect.bottom+5;
+                       y >= downloadRect.top-5  && y <= downloadRect.bottom+5;
     const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
-                       y >= aboutRect.top-5      && y <= aboutRect.bottom+5;
-
+                       y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
     if (inDownload || inAbout) return;
 
     presetIndex = (presetIndex + 1) % presets.length;
     applyPreset(presetIndex);
   }
 
-  function togglePlan(dx) {
+  function togglePlan(dx){
     isOrtho = !isOrtho;
     activeCamera = isOrtho ? orthoCamera : camera;
     const dir = dx > 0 ? 1 : -1;
@@ -392,25 +383,18 @@
   }
 
   // ===== Главный цикл =====
-  function animate() {
+  function animate(){
     requestAnimationFrame(animate);
-
-    // Обновляем картинки для текстур
     safeDraw(ctxNose,  window._bbNose,  nose_canvas.width,  nose_canvas.height);
     safeDraw(ctxLEye,  window._bbLEye,  left_canvas.width,  left_canvas.height);
     safeDraw(ctxREye,  window._bbREye,  right_canvas.width, right_canvas.height);
     safeDraw(ctxMouth, window._bbMouth, mouth_canvas.width, mouth_canvas.height);
 
-    // Обновляем материалы
     if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
     if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
     if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
     if (cube04?.material?.map) cube04.material.map.needsUpdate = true;
 
-    render();
-  }
-
-  function render() {
     activeCamera.lookAt(scene.position);
     renderer.render(scene, activeCamera);
   }
