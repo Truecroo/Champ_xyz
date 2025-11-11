@@ -11,18 +11,20 @@
   <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <!-- MediaPipe FaceMesh (нативно) -->
+  <!-- MediaPipe FaceMesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
-  <!-- ml5 для PoseNet (fallback) -->
+  <!-- ml5 PoseNet (fallback) -->
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <link rel="stylesheet" href="selfie.css" />
   <style>
-    body { margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    /* убираем прокрутку/оверскролл и жесты страницы */
+    html, body { height:100%; margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                 overflow:hidden; overscroll-behavior:none; touch-action:none; }
     #permission-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#000; z-index:10; padding:24px; text-align:center; }
     #button_loader, .downloadButton, .questionButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
-    #container { position:fixed; inset:0; display:none; }
+    #container { position:fixed; inset:0; display:none; touch-action:none; }
     #about { position:fixed; right:12px; bottom:12px; }
     #aboutText { display:none; position:fixed; right:12px; bottom:60px; width:260px; background:rgba(0,0,0,.7); padding:12px; border-radius:8px; }
     #download_div { position:fixed; left:12px; bottom:12px; display:none; }
@@ -81,6 +83,10 @@
   </div>
 
 <script>
+  // ===== глушим скролл/свайпы страницы (на всякий случай помимо CSS) =====
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false }); // iOS pinch жест
+
   // ===== DOM & helpers =====
   const video = document.getElementById("video");
   video.setAttribute('playsinline','true');
@@ -97,15 +103,15 @@
 
   // ===== Three.js =====
   let scene, renderer;
-  let camera, orthoCamera, activeCamera, isOrtho = false; // оставил возможность переключить проекцию кодом, но жест не используем
+  let camera, orthoCamera, activeCamera; // орто оставляем неактивной
   let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
-  // «свои» орбит-контролы
-  let radius = 300;             // постоянная дистанция
+  // «свои» орбит-контролы (zoom-out по умолчанию)
+  let radius = 600;             // БЫЛО 300 → теперь отдалили как «раньше»
   let azimuth = 0;              // горизонтальный угол (рад)
   let polar = Math.PI/2;        // вертикальный (рад)
-  const polarMin = Math.PI/6;   // ограничения, чтобы не «перевернуть» камеру
+  const polarMin = Math.PI/6;
   const polarMax = Math.PI*5/6;
   let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
 
@@ -170,7 +176,7 @@
 
     initThree();
     bootTrackers();   // FaceMesh + PoseNet
-    changePosition(); // показать кубы сразу в кадре
+    changePosition(); // сразу перемешаем
     animate();
   });
 
@@ -196,12 +202,11 @@
         }
         requestAnimationFrame(pump);
       })();
-      console.log('FaceMesh запущен');
     } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
     // PoseNet fallback
     try {
-      const net = ml5.poseNet(video, () => console.log('PoseNet готов'));
+      const net = ml5.poseNet(video, () => {});
       net.on('pose', onPoseNetResults);
     } catch(e) { console.warn('PoseNet не запустился:', e); }
   }
@@ -268,7 +273,7 @@
     }
   }
 
-  // ===== Three setup (без OrbitControls, свой «орбит» перетаскиванием) =====
+  // ===== Three setup (кастомный «орбит» + zoom-out) =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -281,17 +286,16 @@
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(35, aspect, 0.1, 2000);
 
-    // стартовая позиция камеры из сферических координат
     updateCameraFromSpherical();
     camera.lookAt(0,0,0);
 
+    // орто не используем, просто держим как запасной
     const frustumSize = 400;
     orthoCamera = new THREE.OrthographicCamera(
       -frustumSize*aspect/2, frustumSize*aspect/2,
        frustumSize/2, -frustumSize/2,
        0.1, 2000
     );
-    orthoCamera.position.set(0,0,300);
     activeCamera = camera;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -311,7 +315,7 @@
 
     window.addEventListener('resize', onResize);
 
-    // Жесты: «орбит» перетаскиванием + распознаём короткий тап (перемешать)
+    // Жесты: перетаскивание — вращение камеры; короткий тап — перемешать
     document.addEventListener('pointerdown', e=>{
       dragging=true; moved=false; dragStartTime=Date.now();
       lastX=e.clientX; lastY=e.clientY;
@@ -323,7 +327,7 @@
       const dy = e.clientY - lastY;
       if (Math.abs(dx)>2 || Math.abs(dy)>2) moved=true;
 
-      const ROT_SPEED = 0.005; // чем больше — тем быстрее вращение
+      const ROT_SPEED = 0.005;
       azimuth += dx * ROT_SPEED;
       polar   -= dy * ROT_SPEED;
       polar = Math.max(polarMin, Math.min(polarMax, polar));
@@ -336,12 +340,11 @@
       if(!dragging) return;
       const tap = !moved && (Date.now()-dragStartTime < 250);
       dragging=false;
-      if (tap) onTap(e); // короткое касание = перемешать
+      if (tap) onTap(e);
     }, {passive:true});
   }
 
   function updateCameraFromSpherical(){
-    // сферические → декартовы
     const sinP = Math.sin(polar), cosP = Math.cos(polar);
     const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
     const x = radius * sinP * cosA;
@@ -351,7 +354,7 @@
     camera.lookAt(0,0,0);
   }
 
-  // Рандом как в оригинале: повороты + координаты, пока попарные расстояния >=100
+  // Рандом как в оригинале
   function changePosition(){
     let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
@@ -390,7 +393,6 @@
     updateCameraFromSpherical();
   }
 
-  // короткий тап — перемешать
   function onTap(e){
     const downloadRect = document.getElementById("download_div").getBoundingClientRect();
     const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
@@ -400,7 +402,6 @@
     const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
                        y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
     if (inDownload || inAbout) return;
-
     changePosition();
   }
 
