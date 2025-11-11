@@ -2,123 +2,126 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Selfie Cubes — 3D из камеры</title>
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>Selfie — 3D кубы из камеры</title>
 
-  <!-- Three.js -->
+  <!-- jQuery (как в исходнике, для простых fade/handlers) -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+  <!-- Three.js (ЕДИНАЯ версия). OrbitControls подключим как модуль той же версии -->
   <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
 
-  <!-- TensorFlow.js + PoseNet + ml5 -->
+  <!-- TensorFlow.js + ml5 (НЕ подключаем старый posenet! ml5 сам работает с TFJS) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
-  <script src="https://unpkg.com/@tensorflow-models/posenet@2.2.2/dist/posenet.min.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background:#000; color:#fff; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    #app { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; }
-    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #171717; background:rgba(0,0,0,.4); backdrop-filter:blur(6px); }
-    header h1 { margin:0; font-size:14px; font-weight:600; opacity:.9; }
-    main { position: relative; }
-    #container { position:absolute; inset:0; }
-    footer { display:flex; gap:8px; justify-content:center; align-items:center; padding:16px; }
-    .btn { appearance:none; border:1px solid #333; background:#0f0f0f; color:#fff; padding:10px 14px; border-radius:10px; font-weight:600; cursor:pointer; }
+    html, body { height: 100%; margin: 0; background:#000; color:#fff; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+    #container { position: fixed; inset: 0; display: none; } /* появится после разрешения камеры */
+    header, footer { position: fixed; left:0; right:0; display:flex; gap:8px; justify-content:center; z-index: 10; }
+    header { top:0; padding:10px; pointer-events:none; }
+    footer { bottom:0; padding:12px; }
+    .btn { pointer-events:auto; appearance:none; border:1px solid #333; background:#101010; color:#fff; padding:10px 14px; border-radius:12px; font-weight:600; }
     .btn.primary { background:#fff; color:#000; border-color:#fff; }
-    #status { font-size:12px; opacity:.8; text-align:center; padding:6px 12px; }
-    #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.85); }
-    .card { background:#0d0d0d; border:1px solid #222; border-radius:14px; padding:16px; max-width:520px; text-align:center; }
+    #status { position:fixed; left:0; right:0; bottom:64px; text-align:center; font-size:12px; opacity:.85; z-index:10; }
+    #overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.85); z-index:20; }
+    .card { background:#0f0f0f; border:1px solid #222; border-radius:16px; padding:18px; width:min(520px,90vw); text-align:center; }
     .card h2 { margin:0 0 8px; font-size:18px; }
     .note { font-size:12px; opacity:.8; }
-    video { position: fixed; left:-9999px; width:0; height:0; opacity:0; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    video { position: fixed; left:-9999px; width:0; height:0; opacity:0; }
+    #mobileOnly { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:30; }
+    #mobileOnly.show { display:flex; }
   </style>
 </head>
 <body>
-<div id="app">
-  <header>
-    <h1>Selfie Cubes · PoseNet + Three.js</h1>
-    <button id="btnInfo" class="btn">Инфо</button>
-  </header>
 
-  <main>
-    <div id="container" aria-label="3D полотно"></div>
+<header>
+  <button id="btnInfo" class="btn">Инфо</button>
+</header>
 
-    <div id="overlay" role="dialog" aria-modal="true">
-      <div class="card">
-        <h2>Дай доступ к камере</h2>
-        <p>Мы собираем кубики из видео с фронталки. Ничего никуда не отправляется — всё локально в браузере.</p>
-        <p class="note">Если открыл через встроенный браузер (Telegram/IG/VK) — нажми «Открыть в браузере» и используй Safari/Chrome.</p>
-        <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
-          <button id="btnStart" class="btn primary">Разрешить камеру</button>
-        </div>
-      </div>
+<div id="container" aria-label="3D полотно"></div>
+
+<div id="overlay" role="dialog" aria-modal="true">
+  <div class="card">
+    <h2>Разреши доступ к камере</h2>
+    <p>Мы собираем 3D-кубы из твоего видео (нос, глаза, рот). Всё работает локально в браузере — данные никуда не отправляются.</p>
+    <p class="note">Если открыт во встроенном браузере (Telegram/IG/VK) — нажми «Открыть в браузере» и открой в Safari/Chrome.</p>
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
+      <button id="btnStart" class="btn primary">Разрешить камеру</button>
     </div>
-
-    <!-- скрытые поверхности для текстур -->
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="cNose"  width="300" height="300" class="sr-only"></canvas>
-    <canvas id="cEyeL"  width="300" height="300" class="sr-only"></canvas>
-    <canvas id="cEyeR"  width="300" height="300" class="sr-only"></canvas>
-    <canvas id="cMouth" width="300" height="150" class="sr-only"></canvas>
-  </main>
-
-  <footer>
-    <button id="btnShuffle" class="btn">Перемешать</button>
-    <button id="btnCapture" class="btn primary">Снимок</button>
-  </footer>
+  </div>
 </div>
+
+<div id="mobileOnly"><div class="card"><h2>Открой на телефоне</h2><p>Этот опыт рассчитан на мобильный экран (&lt; 801px по ширине).</p></div></div>
+
+<footer>
+  <button id="btnCapture" class="btn primary">Снимок</button>
+</footer>
 
 <p id="status" aria-live="polite"></p>
 
+<!-- Скрытые поверхности для текстур -->
+<video id="video" autoplay playsinline muted></video>
+<canvas id="cNose"  width="300" height="300" class="sr-only"></canvas>
+<canvas id="cEyeL"  width="300" height="300" class="sr-only"></canvas>
+<canvas id="cEyeR"  width="300" height="300" class="sr-only"></canvas>
+<canvas id="cMouth" width="300" height="150" class="sr-only"></canvas>
+
 <script>
-// ——— helpers ———
-const $ = s => document.querySelector(s);
+/* ========= ХЕЛПЕРЫ ========= */
+const $ = sel => document.querySelector(sel);
 const on = (el,ev,cb)=> el.addEventListener(ev,cb);
-const log = m => { $('#status').textContent = m; };
+const log = (m)=> { $('#status').textContent = m; };
 const lerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
 const dist=(x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
 
-// ——— state ———
-let video = $('#video'), stream=null;
+/* ========= СОСТОЯНИЕ ========= */
 let scene, camera, renderer, controls;
-let texNose, texEyeL, texEyeR, texMouth;
 let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
-let noseX=0,noseY=0,leX=0,leY=0,reX=0,reY=0,mX=0,mY=0;
+let texNose, texEyeL, texEyeR, texMouth;
+let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 let started=false;
+let drag=false; // для отличия свайпа от тапа (как в исходном коде)
+const video = $('#video');
 
-const cNose=$('#cNose'), cEyeL=$('#cEyeL'), cEyeR=$('#cEyeR'), cMouth=$('#cMouth');
-const ctxN=cNose.getContext('2d'), ctxL=cEyeL.getContext('2d'),
-      ctxR=cEyeR.getContext('2d'), ctxM=cMouth.getContext('2d');
+const cNose = $('#cNose'), cEyeL = $('#cEyeL'), cEyeR = $('#cEyeR'), cMouth = $('#cMouth');
+const ctxN  = cNose.getContext('2d'), ctxL = cEyeL.getContext('2d'),
+      ctxR  = cEyeR.getContext('2d'), ctxM = cMouth.getContext('2d');
 
-// ——— UI ———
-on($('#btnInfo'),'click',()=> alert('Selfie Cubes: нос/глаза/рот вырезаются из видео и мапятся на 3D-кубы. Все вычисления локально.'));
+/* ========= UI ========= */
+on($('#btnInfo'),'click',()=>alert('Тап — перемешать кубы. Свайп/drag — вращать сцену. Кнопка «Снимок» сохранит PNG. Все вычисления на устройстве.'));
 
 on($('#btnStart'),'click', async ()=>{
   try{
-    if(location.protocol!=='https:' && location.hostname!=='localhost'){
-      alert('Нужен HTTPS. Открой через https:// (на Vercel он уже есть).'); return;
+    if (innerWidth >= 801) { $('#mobileOnly').classList.add('show'); return; }
+    if (location.protocol!=='https:' && location.hostname!=='localhost'){
+      alert('Нужен HTTPS. Открой проект на https:// (Vercel) или локально.'); return;
     }
     log('Запрашиваем камеру…');
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'user' } }, audio:false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'user' } }, audio:false });
     video.srcObject = stream;
-    // дождаться метаданных и запустить
+
+    // Ждём метаданные и старт
     if (video.readyState < 1) await new Promise(res => video.onloadedmetadata = res);
     await video.play();
 
-    // КРИТИЧЕСКОЕ: зафиксировать реальные размеры видео (для совпадения координат PoseNet)
-    await new Promise(r=>setTimeout(r,50)); // iOS небольшой yield
+    // КРИТИЧЕСКОЕ: фиксируем реальные размеры видео (чтобы кроп совпадал с координатами PoseNet)
+    await new Promise(r=>setTimeout(r,50)); // небольшой yield для iOS
     video.width  = video.videoWidth  || 480;
     video.height = video.videoHeight || 640;
 
     $('#overlay').style.display='none';
-    log('Камера ок. Загружаем PoseNet…');
+    $('#container').style.display='block';
+    log('Камера ок. Загружаем модель…');
+
     boot();
   }catch(err){
     console.error(err);
     alert(`Ошибка камеры: ${err.name} — ${err.message}`);
-    $('#overlay').style.display='flex';
-    log('Доступ к камере отклонён. Разреши камеру в настройках сайта/браузера.');
+    log('Доступ к камере отклонён. Разреши камеру в настройках браузера/сайта.');
   }
 });
 
@@ -129,83 +132,113 @@ on($('#btnCapture'),'click',()=>{
   a.download='selfie.png'; a.click();
 });
 
-on($('#btnShuffle'),'click',()=> shuffleCubes());
+/* ========= ТАП/СВАЙП КАК В ОРИГИНАЛЕ ========= */
+// pointerdown -> drag=false; pointermove -> drag=true; pointerup -> если !drag => перемешать
+on(document,'pointerdown',()=>{ drag=false; });
+on(document,'pointermove',()=>{ drag=true; });
+on(document,'pointerup',(e)=>{
+  // игнорим, если клик по кнопкам
+  const t = e.target;
+  if (t.closest('button')) return;
+  if (!drag) changePosition(); // «тап»
+});
 
-// ——— three.js ———
+/* ========= THREE ========= */
 function initThree(){
   const WIDTH=innerWidth, HEIGHT=innerHeight;
   scene = new THREE.Scene();
+
   renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
   renderer.setPixelRatio(devicePixelRatio||1);
   renderer.setSize(WIDTH,HEIGHT);
   document.getElementById('container').appendChild(renderer.domElement);
+  renderer.setClearColor('#000000');
 
   camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
   camera.position.set(0,0,281);
 
+  // OrbitControls — модулем той же версии, что three
   import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js')
     .then(mod=>{
       const OrbitControls = mod.OrbitControls;
       controls = new OrbitControls(camera, renderer.domElement);
-      controls.enablePan=false;
-      controls.enableZoom=false;
-      controls.rotateSpeed=1.0;
-      controls.enableDamping=true;
-      controls.dampingFactor=0.08;
-      controls.minDistance=600;
-      controls.maxDistance=600;
-      controls.target.set(0,0,0);
+      controls.minDistance = 600;
+      controls.maxDistance = 600;
+      controls.enablePan   = false;
+      controls.enableZoom  = false;
+      controls.enableRotate= true;
+      controls.rotateSpeed = 1.0;
     });
 
-  scene.fog = new THREE.Fog(0xFFFFFF,1,25000);
+  // Свет (как в исходнике, упрощённо)
   scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
   const dir = new THREE.DirectionalLight(0xffffff,0.4); dir.position.set(-3000,4000,3000); scene.add(dir);
+  scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
 
+  // Текстуры с Canvas
   texNose  = new THREE.CanvasTexture(cNose);
   texEyeL  = new THREE.CanvasTexture(cEyeL);
   texEyeR  = new THREE.CanvasTexture(cEyeR);
   texMouth = new THREE.CanvasTexture(cMouth);
 
-  cubeNose = new THREE.Mesh(new THREE.BoxGeometry(50,80,50),  new THREE.MeshBasicMaterial({ map: texNose  }));
-  cubeEyeL = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeL  }));
-  cubeEyeR = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeR  }));
-  cubeMouth= new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
+  // Геометрия кубов
+  cubeNose  = new THREE.Mesh(new THREE.BoxGeometry(50,80,50),  new THREE.MeshBasicMaterial({ map: texNose  }));
+  cubeEyeL  = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeL  }));
+  cubeEyeR  = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeR  }));
+  cubeMouth = new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
 
   scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
-  shuffleCubes();
 
-  addEventListener('resize', ()=>{
-    const W=innerWidth,H=innerHeight;
+  // Начальные позиции/повороты как в исходнике (рандом в допустимых пределах)
+  changePosition();
+
+  // Resize
+  on(window,'resize', ()=>{
+    const W=innerWidth, H=innerHeight;
     renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
   });
 }
 
-function shuffleCubes(){
-  const rnd=(a,b)=>Math.random()*(b-a)+a;
-  cubeNose.position.set(rnd(-55,55),  rnd(-140,140), 0); cubeNose.rotation.set(0, rnd(0.1,0.5), 0);
-  cubeEyeL.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeL.rotation.set(0, rnd(0.1,0.5), 0);
-  cubeEyeR.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeR.rotation.set(0, rnd(0.1,0.5), 0);
-  cubeMouth.position.set(rnd(-45,45), rnd(-155,155), 0); cubeMouth.rotation.set(0, rnd(0.1,0.5), 0);
+/* ========= РАНДОМИЗАЦИЯ КУБОВ (как в исходнике) ========= */
+function rand(a,b){ return Math.random()*(b-a)+a; }
+
+function changePosition(){
+  let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
+  do {
+    cubeNose.rotation.y  = rand(0.1,0.5);
+    cubeEyeL.rotation.y  = rand(0.1,0.5);
+    cubeEyeR.rotation.y  = rand(0.1,0.5);
+    cubeMouth.rotation.y = rand(0.1,0.5);
+
+    cubeNose.position.set( rand(-55,55),  rand(-140,140), 0 );
+    cubeEyeL.position.set( rand(-50,50),  rand(-150,150), 0 );
+    cubeEyeR.position.set( rand(-50,50),  rand(-150,150), 0 );
+    cubeMouth.position.set(rand(-45,45),  rand(-155,155), 0 );
+
+    const p01=cubeNose.position, p02=cubeEyeL.position, p03=cubeEyeR.position, p04=cubeMouth.position;
+    const f=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    d1=f(p01,p02); d2=f(p02,p03); d3=f(p01,p03); d4=f(p03,p04); d5=f(p02,p04); d6=f(p01,p04);
+  } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
 }
 
-// ——— PoseNet ———
+/* ========= POSENET (через ml5) ========= */
 function startPoseNet(){
-  const net = ml5.poseNet(video, ()=> log('PoseNet готов'));
-  net.on('pose',(res)=>{
-    if(!res.length) return;
-    const k = res[0].pose.keypoints;
-    const nX = k[0].position.x, nY = k[0].position.y;   // nose
-    const Lx = k[1].position.x, Ly = k[1].position.y;   // left eye
-    const Rx = k[2].position.x, Ry = k[2].position.y;   // right eye
+  const net = ml5.poseNet(video, ()=> log('Модель готова'));
+  net.on('pose',(results)=>{
+    if(!results.length) return;
+    const k = results[0].pose.keypoints;
+    const nX = k[0].position.x, nY = k[0].position.y; // нос
+    const Lx = k[1].position.x, Ly = k[1].position.y; // левый глаз
+    const Rx = k[2].position.x, Ry = k[2].position.y; // правый глаз
     noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
-    leX   = lerp(leX  ,Lx,.5); leY   = lerp(leY  ,Ly,.5);
-    reX   = lerp(reX  ,Rx,.5); reY   = lerp(reY  ,Ry,.5);
+    leX   = lerp(leX,Lx,.5);  leY   = lerp(leY,Ly,.5);
+    reX   = lerp(reX,Rx,.5);  reY   = lerp(reY,Ry,.5);
     const d = dist(noseX,noseY,leX,leY);
-    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);      // mouth ≈ nose + d вниз
+    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);     // рот ≈ нос + d вниз (как в оригинале)
   });
 }
 
-// ——— рендер-цикл ———
+/* ========= РЕНДЕР-ЦИКЛ ========= */
 function loop(){
   requestAnimationFrame(loop);
 
@@ -213,6 +246,7 @@ function loop(){
   const vw = video.width  || video.videoWidth  || 480;
   const vh = video.height || video.videoHeight || 640;
 
+  // безопасный кроп (не выходим за края кадра)
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const safe=(sx,sy,sw,sh)=>{
     const x=clamp(sx,0,vw-1), y=clamp(sy,0,vh-1);
@@ -220,25 +254,29 @@ function loop(){
     return {x,y,w,h};
   };
 
-  try {
+  try{
     let r;
     r=safe(noseX-d/2, noseY-d/2, d+0.01, d+0.01); ctxN.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
     r=safe(leX  -d/2, leY  -d/2, d+0.01, d+0.01); ctxL.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
     r=safe(reX  -d/2, reY  -d/2, d+0.01, d+0.01); ctxR.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
     r=safe(mX   -d/2, mY   -d/2, d+0.01, d+0.01); ctxM.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,150);
-  } catch(e) { /* ждём первый апдейт позы */ }
+  }catch(e){ /* ждём первый апдейт позы */ }
 
-  if(texNose)  texNose.needsUpdate=true;
-  if(texEyeL)  texEyeL.needsUpdate=true;
-  if(texEyeR)  texEyeR.needsUpdate=true;
-  if(texMouth) texMouth.needsUpdate=true;
+  if (texNose)  texNose.needsUpdate  = true;
+  if (texEyeL)  texEyeL.needsUpdate  = true;
+  if (texEyeR)  texEyeR.needsUpdate  = true;
+  if (texMouth) texMouth.needsUpdate = true;
 
-  if(renderer && camera && scene){ camera.lookAt(scene.position); renderer.render(scene,camera); controls && controls.update(); }
+  if (renderer && camera && scene){
+    camera.lookAt(scene.position);
+    renderer.render(scene,camera);
+    if (controls) controls.update();
+  }
 }
 
-// ——— boot ———
+/* ========= ЗАПУСК ========= */
 function boot(){
-  if(started) return; started=true;
+  if(started) return; started = true;
   initThree();
   startPoseNet();
   loop();
