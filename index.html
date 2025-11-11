@@ -5,10 +5,9 @@
   <title>Куб-селфи</title>
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
-  <!-- jQuery -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
-  <!-- THREE.js (фиксированные версии) -->
+  <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
 
@@ -16,10 +15,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
-
-  <!-- Опционально, не критично -->
-  <script src="https://cdn.jsdelivr.net/npm/ismobilejs@1/dist/isMobile.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.min.js"></script>
 
   <link rel="stylesheet" href="selfie.css" />
   <style>
@@ -41,7 +36,6 @@
 </head>
 
 <body>
-
   <div id="loading-screen" class="wrapper">
     <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…" />
   </div>
@@ -60,7 +54,7 @@
 
   <div id="container"></div>
 
-  <!-- Канвасы под текстуры (увеличены для ретины) -->
+  <!-- Канвасы под текстуры -->
   <canvas id="canvas04" width="512" height="512" style="display:none"></canvas>  <!-- нос -->
   <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
   <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
@@ -75,8 +69,7 @@
     <div id="aboutText">
       <p class="explain"><b>Куб-селфи</b> — эксперимент с 3D и детекцией лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
-        Технологии: <a href="https://threejs.org/">Three.js</a> и <a href="https://learn.ml5js.org/#/reference/facemesh">ml5 FaceMesh</a><br /><br />
-        Сборка: команда Егора ✦
+        Технологии: <a href="https://threejs.org/">Three.js</a> и <a href="https://learn.ml5js.org/#/reference/facemesh">ml5 FaceMesh</a>
       </p>
     </div>
     <button class="questionButton" id="aboutButton">Инфо</button>
@@ -110,11 +103,11 @@
   let cube01, cube02, cube03, cube04; // нос, левый, правый, рот
   const FIXED_Z = 0;
 
-  // Аккуратные пресеты (x,y)
+  // Пресеты (централизовал ближе к (0,0), чтобы точно были в кадре)
   const presets = [
-    { nose:[  30,-130], lEye:[-30, -30], rEye:[ 50,  80], mouth:[-40, 100] },
-    { nose:[   0, -90], lEye:[-60, -40], rEye:[ 60, -40], mouth:[  0, 110] },
-    { nose:[ -20,-120], lEye:[-70,  10], rEye:[ 40,  40], mouth:[-10, 120] }
+    { nose:[   0,  -60], lEye:[ -70, -20], rEye:[  70, -20], mouth:[   0,  70] },
+    { nose:[ -30,  -80], lEye:[ -90,  10], rEye:[  40,  30], mouth:[ -10,  90] },
+    { nose:[  25,  -90], lEye:[ -50, -10], rEye:[  60,  40], mouth:[ -20, 100] }
   ];
   let presetIndex = 0;
 
@@ -144,7 +137,7 @@
 
   $("#container, #discription").on('touchstart mousedown', function(){ $("#discription").fadeOut('fast'); });
 
-  // ===== Камера с детальным хэндлером ошибок =====
+  // ===== Камера с хэндлером ошибок =====
   async function askCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
@@ -179,13 +172,13 @@
       return;
     }
 
-    // Видео уже играет — показываем сцену и сразу скрываем лоадер
+    // Видео уже играет — показываем сцену и скрываем лоадер
     $("#container").fadeIn('slow');
     $("#download_div").fadeIn('slow');
     $("#aboutButton").fadeIn('slow');
     $("#loading-screen").fadeOut('fast');
 
-    // Инициализируем FaceMesh (не блокируем UI, если он не ответит)
+    // Инициализируем FaceMesh (не блокируя UI)
     try {
       if (!ml5 || !ml5.faceMesh) throw new Error("ml5.faceMesh недоступен");
       faceMesh = ml5.faceMesh(video, () => console.log("FaceMesh готов"));
@@ -194,9 +187,9 @@
       console.warn("FaceMesh не инициализировался:", e);
     }
 
-    // Форс-таймер: если нет ни одного предикта >5с — просто продолжаем без трекинга
+    // Форс-таймер: если нет ни одного предикта >5с — работаем с полным кадром
     setTimeout(() => {
-      if (!firstPredictionCame) console.warn("Нет предиктов FaceMesh >5с. Работаем без трекинга.");
+      if (!firstPredictionCame) console.warn("Нет предиктов FaceMesh >5с. Работаем на полном кадре.");
     }, 5000);
   });
 
@@ -226,37 +219,32 @@
   }
 
   // ===== Three.js init =====
-  const WIDTH = window.innerWidth;
-  const HEIGHT = window.innerHeight;
-  const VIEW_ANGLE = 35, ASPECT = WIDTH/HEIGHT, NEAR = 0.1, FAR = 2000;
-
+  const VIEW_ANGLE = 35, NEAR = 0.1, FAR = 2000;
   initThree();
   animate();
 
   function initThree(){
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
+    // слегка серый фон, чтобы кубы на старте были виднее
+    scene.background = new THREE.Color(0x0b0b0b);
 
     renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
-    renderer.setSize(WIDTH, HEIGHT);
-    renderer.setClearColor('#000000');
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
+    renderer.setSize(window.innerWidth, window.innerHeight);
     document.getElementById('container').appendChild(renderer.domElement);
 
-    // Камеры: перспектива + ортографическая
-    camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
-    camera.position.set(0,0,281);
+    // камеры
+    const aspect = window.innerWidth / window.innerHeight;
+    camera = new THREE.PerspectiveCamera(VIEW_ANGLE, aspect, NEAR, FAR);
+    camera.position.set(0,0,300);
 
     const frustumSize = 400;
     orthoCamera = new THREE.OrthographicCamera(
-      -frustumSize*ASPECT/2, frustumSize*ASPECT/2,
+      -frustumSize*aspect/2, frustumSize*aspect/2,
        frustumSize/2, -frustumSize/2,
        NEAR, FAR
     );
-    orthoCamera.position.set(0,0,281);
+    orthoCamera.position.set(0,0,300);
 
     activeCamera = camera;
 
@@ -265,17 +253,13 @@
     controls.enableZoom = false;
     controls.enableRotate = false;
 
-    // Свет
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8);
-    hemi.position.set(100, 500, 0);
-    scene.add(hemi);
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.4);
-    dir.position.set(-3000, 4000, 3000);
-    dir.castShadow = true;
+    // свет: добавил слабый Ambient, чтобы кубы не терялись
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(300, 400, 500);
     scene.add(dir);
 
-    // Текстуры с канвасов
+    // текстуры
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
@@ -286,10 +270,9 @@
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye  });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // Геометрии кубов
-    const gNose  = new THREE.BoxGeometry(50, 80, 50);
-    const gEye   = new THREE.BoxGeometry(50, 50, 50);
-    const gMouth = new THREE.BoxGeometry(100, 45, 45);
+    const gNose  = new THREE.BoxGeometry(70, 90, 70);
+    const gEye   = new THREE.BoxGeometry(60, 60, 60);
+    const gMouth = new THREE.BoxGeometry(120, 55, 55);
 
     cube01 = new THREE.Mesh(gNose,  matNose);   // нос
     cube02 = new THREE.Mesh(gEye,   matLEye);   // левый глаз
@@ -330,15 +313,15 @@
   }
 
   // ===== Рендер из видео в канвасы =====
-  function safeDraw(dstCtx, b, dw, dh){
-    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) return;
-    const sx = Math.max(0, b.x);
-    const sy = Math.max(0, b.y);
-    const sw = Math.max(1, b.w);
-    const sh = Math.max(1, b.h);
-    try {
-      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-    } catch(e) { /* иногда размеры ещё не готовы — пропускаем */ }
+  function drawFull(dstCtx, dw, dh){
+    try { dstCtx.drawImage(video, 0, 0, video.videoWidth||dw, video.videoHeight||dh, 0, 0, dw, dh); }
+    catch(e){}
+  }
+  function drawCrop(dstCtx, b, dw, dh){
+    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) { drawFull(dstCtx, dw, dh); return; }
+    const sx = Math.max(0, b.x), sy = Math.max(0, b.y);
+    const sw = Math.max(1, b.w), sh = Math.max(1, b.h);
+    try { dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh); } catch(e){}
   }
 
   // ===== Жесты: тап / свайп =====
@@ -351,9 +334,7 @@
     const t = e.touches[0];
     touchStartX = t.clientX; touchStartY = t.clientY;
   }, {passive:true});
-
   document.addEventListener('touchmove', ()=>{ drag=true; }, {passive:true});
-
   document.addEventListener('touchend', (e)=>{
     if(!drag){ onTap(e.changedTouches ? e.changedTouches[0] : e); return; }
     const dx = (e.changedTouches[0].clientX - touchStartX);
@@ -364,7 +345,6 @@
     const downloadRect = document.getElementById("download_div").getBoundingClientRect();
     const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
     const x = e.pageX || e.clientX, y = e.pageY || e.clientY;
-
     const inDownload = x >= downloadRect.left-5 && x <= downloadRect.right+5 &&
                        y >= downloadRect.top-5  && y <= downloadRect.bottom+5;
     const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
@@ -379,16 +359,26 @@
     isOrtho = !isOrtho;
     activeCamera = isOrtho ? orthoCamera : camera;
     const dir = dx > 0 ? 1 : -1;
-    scene.rotation.y += dir * 0.15; // лёгкий поворот для ощущения смены плана
+    scene.rotation.y += dir * 0.15;
   }
 
   // ===== Главный цикл =====
   function animate(){
     requestAnimationFrame(animate);
-    safeDraw(ctxNose,  window._bbNose,  nose_canvas.width,  nose_canvas.height);
-    safeDraw(ctxLEye,  window._bbLEye,  left_canvas.width,  left_canvas.height);
-    safeDraw(ctxREye,  window._bbREye,  right_canvas.width, right_canvas.height);
-    safeDraw(ctxMouth, window._bbMouth, mouth_canvas.width, mouth_canvas.height);
+
+    // пока нет лендмарок — рисуем ПОЛНЫЙ кадр (чтобы кубы сразу были видны)
+    const hasLM = !!(window._bbNose || window._bbLEye || window._bbREye || window._bbMouth);
+    if (hasLM) {
+      drawCrop(ctxNose,  window._bbNose,  nose_canvas.width,  nose_canvas.height);
+      drawCrop(ctxLEye,  window._bbLEye,  left_canvas.width,  left_canvas.height);
+      drawCrop(ctxREye,  window._bbREye,  right_canvas.width, right_canvas.height);
+      drawCrop(ctxMouth, window._bbMouth, mouth_canvas.width, mouth_canvas.height);
+    } else {
+      drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
+      drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
+      drawFull(ctxREye,  right_canvas.width, right_canvas.height);
+      drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
+    }
 
     if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
     if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
