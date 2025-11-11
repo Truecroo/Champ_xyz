@@ -73,4 +73,180 @@
   </footer>
 </div>
 
-<p id="status" aria-live="polite"><
+<p id="status" aria-live="polite"></p>
+
+<script>
+/* ===== helpers ===== */
+const $ = s => document.querySelector(s);
+const on = (el, ev, cb) => el.addEventListener(ev, cb);
+const log = m => { $('#status').textContent = m; };
+const lerp = (a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
+const dist = (x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
+
+/* ===== state ===== */
+let video = $('#video'), stream=null;
+let scene, camera, renderer, controls;
+let texNose, texEyeL, texEyeR, texMouth;
+let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
+let noseX=0,noseY=0,leX=0,leY=0,reX=0,reY=0,mX=0,mY=0;
+let started=false;
+
+/* canvases */
+const cNose=$('#cNose'), cEyeL=$('#cEyeL'), cEyeR=$('#cEyeR'), cMouth=$('#cMouth');
+const ctxN=cNose.getContext('2d'), ctxL=cEyeL.getContext('2d'),
+      ctxR=cEyeR.getContext('2d'), ctxM=cMouth.getContext('2d');
+
+/* ===== UI ===== */
+on($('#btnInfo'), 'click', ()=> alert('Selfie Cubes: нос/глаза/рот вырезаются из видео и мапятся на 3D-кубы. Все вычисления локально.'));
+
+on($('#btnStart'), 'click', async ()=>{
+  try{
+    if(location.protocol!=='https:' && location.hostname!=='localhost'){
+      alert('Нужен HTTPS. Открой через https:// (на Vercel он уже есть).'); return;
+    }
+    log('Запрашиваем камеру…');
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'user' } }, audio:false });
+    video.srcObject = stream; await video.play();
+
+    // ✅ важное: выставляем реальные размеры — PoseNet использует координаты видео
+    await new Promise(r=>setTimeout(r,50));
+    const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
+    video.width = vw; video.height = vh;
+
+    $('#overlay').style.display='none';
+    log('Камера ок. Загружаем PoseNet…');
+    boot();
+  }catch(err){
+    alert(`Ошибка камеры: ${err.name} — ${err.message}`);
+    console.error(err); log('Доступ отклонён. Разреши камеру в настройках сайта/браузера.');
+  }
+});
+
+on($('#btnCapture'), 'click', ()=>{
+  if(!renderer) return;
+  const a=document.createElement('a');
+  a.href=renderer.domElement.toDataURL('image/png'); a.download='selfie.png'; a.click();
+});
+
+on($('#btnShuffle'), 'click', ()=> shuffleCubes());
+
+/* тап без перетаскивания = перемешать (как в оригинале) */
+let dragging=false;
+const containerEl = document.getElementById('container');
+containerEl.addEventListener('pointerdown', ()=> dragging=false);
+containerEl.addEventListener('pointermove', ()=> dragging=true);
+containerEl.addEventListener('pointerup', ()=>{ if(!dragging) shuffleCubes(); });
+
+/* ===== three.js ===== */
+function initThree(){
+  const WIDTH=innerWidth, HEIGHT=innerHeight;
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+  renderer.setPixelRatio(devicePixelRatio||1); renderer.setSize(WIDTH,HEIGHT);
+  document.getElementById('container').appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
+  camera.position.set(0,0,281);
+
+  import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js')
+    .then(mod=>{
+      const OrbitControls = mod.OrbitControls;
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enablePan=false; controls.enableZoom=false; controls.rotateSpeed=1.0;
+      controls.minDistance=600; controls.maxDistance=600;
+    });
+
+  scene.fog = new THREE.Fog(0xFFFFFF,1,25000);
+  scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
+  const dir = new THREE.DirectionalLight(0xffffff,0.4); dir.position.set(-3000,4000,3000); scene.add(dir);
+
+  texNose  = new THREE.CanvasTexture(cNose);
+  texEyeL  = new THREE.CanvasTexture(cEyeL);
+  texEyeR  = new THREE.CanvasTexture(cEyeR);
+  texMouth = new THREE.CanvasTexture(cMouth);
+
+  cubeNose = new THREE.Mesh(new THREE.BoxGeometry(50,80,50),  new THREE.MeshBasicMaterial({ map: texNose  }));
+  cubeEyeL = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeL  }));
+  cubeEyeR = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeR  }));
+  cubeMouth= new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
+
+  scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
+  shuffleCubes();
+
+  addEventListener('resize', ()=>{
+    const W=innerWidth,H=innerHeight;
+    renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
+  });
+}
+
+function shuffleCubes(){
+  const rnd=(a,b)=>Math.random()*(b-a)+a;
+  cubeNose.position.set(rnd(-55,55),  rnd(-140,140), 0); cubeNose.rotation.y = rnd(0.1,0.5);
+  cubeEyeL.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeL.rotation.y = rnd(0.1,0.5);
+  cubeEyeR.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeR.rotation.y = rnd(0.1,0.5);
+  cubeMouth.position.set(rnd(-45,45), rnd(-155,155), 0); cubeMouth.rotation.y = rnd(0.1,0.5);
+}
+
+/* ===== PoseNet ===== */
+function startPoseNet(){
+  const net = ml5.poseNet(video, ()=> log('PoseNet готов'));
+  net.on('pose', (res)=>{
+    if(!res.length) return;
+    const k = res[0].pose.keypoints;
+    const nX = k[0].position.x, nY = k[0].position.y;   // nose
+    const Lx = k[1].position.x, Ly = k[1].position.y;   // left eye
+    const Rx = k[2].position.x, Ry = k[2].position.y;   // right eye
+    noseX=lerp(noseX,nX,.5); noseY=lerp(noseY,nY,.5);
+    leX =lerp(leX ,Lx,.5); leY=lerp(leY,Ly,.5);
+    reX =lerp(reX ,Rx,.5); reY=lerp(reY,Ry,.5);
+    const d = dist(noseX,noseY,leX,leY);
+    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);       // mouth ≈ nose + d вниз
+  });
+}
+
+/* ===== render loop ===== */
+function loop(){
+  requestAnimationFrame(loop);
+
+  const d = dist(noseX,noseY,leX,leY) || 120;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const vw=video.width||video.videoWidth||480, vh=video.height||video.videoHeight||640;
+
+  const safe = (sx,sy,sw,sh)=>{
+    const x=clamp(sx,0,vw-1), y=clamp(sy,0,vh-1);
+    const w=clamp(sw,1,vw-x), h=clamp(sh,1,vh-y);
+    return {x,y,w,h};
+  };
+
+  try{
+    let r;
+    r=safe(noseX-d/2, noseY-d/2, d+0.01, d+0.01); ctxN.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
+    r=safe(leX  -d/2, leY  -d/2, d+0.01, d+0.01); ctxL.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
+    r=safe(reX  -d/2, reY  -d/2, d+0.01, d+0.01); ctxR.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
+    r=safe(mX   -d/2, mY   -d/2, d+0.01, d+0.01); ctxM.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,150);
+  }catch(e){ /* ждём первый апдейт позы */ }
+
+  // лёгкая авто-ротация — «кубы крутятся»
+  if(cubeNose)  cubeNose.rotation.y  += 0.003;
+  if(cubeEyeL)  cubeEyeL.rotation.y  += 0.0035;
+  if(cubeEyeR)  cubeEyeR.rotation.y  += 0.0025;
+  if(cubeMouth) cubeMouth.rotation.y += 0.0028;
+
+  if(texNose)  texNose.needsUpdate = true;
+  if(texEyeL)  texEyeL.needsUpdate = true;
+  if(texEyeR)  texEyeR.needsUpdate = true;
+  if(texMouth) texMouth.needsUpdate = true;
+
+  if(renderer && camera && scene){ camera.lookAt(scene.position); renderer.render(scene,camera); controls && controls.update(); }
+}
+
+/* ===== boot ===== */
+function boot(){
+  if(started) return; started = true;
+  initThree();
+  startPoseNet();
+  loop();
+}
+</script>
+</body>
+</html>
