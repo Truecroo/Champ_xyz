@@ -1,738 +1,226 @@
-
 <!DOCTYPE html>
-<html lang="en" Set-Cookie: flavor=choco; SameSite=None; Secure>
-
+<html lang="en">
 <head>
-  <title></title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-  <!--<script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>-->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Selfie Cubes</title>
+  
+  <!-- Three.js + OrbitControls (same version) -->
+  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- TensorFlow.js + PoseNet + ml5 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow-models/posenet@2.2.2/dist/posenet.min.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  
-  <script src="https://sapirmash.github.io/Face/build/three.min.js"></script>
-  <script src="https://sapirmash.github.io/Face/examples/js/controls/OrbitControls.js"></script>
-  <!-- <script src="https://sapirmash.github.io/Face/src/geometries/TextGeometry.js"></script> -->
-  <!-- <script src="https://sapirmash.github.io/Face/src/loaders/FontLoader.js"></script> -->
 
-
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"> </script>
-  <script src="https://unpkg.com/@tensorflow-models/posenet@1.0.3/dist/posenet.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ismobilejs@1/dist/isMobile.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.min.js"></script>
-  <link rel="stylesheet" href="selfie.css">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: #000; color: #fff; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #app { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #171717; backdrop-filter: blur(6px); background: rgba(0,0,0,.4); }
+    header h1 { font-size: 14px; margin: 0; opacity: .8; font-weight: 600; }
+    main { position: relative; }
+    #container { position: absolute; inset: 0; }
+    footer { display: flex; gap: 8px; justify-content: center; align-items: center; padding: 16px; }
+    .btn { appearance: none; border: 1px solid #333; background: #0f0f0f; color: #fff; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .btn.primary { background: #fff; color: #000; border-color: #fff; }
+    #status { font-size: 12px; opacity: .75; text-align: center; padding: 6px 12px; }
+    #overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.85); }
+    #overlay.show { display: flex; }
+    .card { background: #0d0d0d; border: 1px solid #222; border-radius: 14px; padding: 16px; max-width: 520px; text-align: center; }
+    .card h2 { margin: 0 0 8px; font-size: 18px; }
+    .note { font-size: 12px; opacity: .75; }
+    video { position: fixed; left: -9999px; width: 0; height: 0; opacity: 0; }
+    canvas { image-rendering: auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  </style>
 </head>
+<body>
+<div id="app">
+  <header>
+    <h1>Selfie Cubes · PoseNet + Three.js</h1>
+    <div>
+      <button id="btnInfo" class="btn" title="Info">Info</button>
+    </div>
+  </header>
 
-<body id="body_ID">
+  <main>
+    <div id="container" aria-label="3D canvas area"></div>
 
-<div id="loading-screen" class="wrapper" style="display: none;">
- <img id="loading_gif" src="Loading_G.gif"> 
-  <!-- <video id="loading_video" loop autoplay muted playsinline width="480" height="640">
-     <source src="loading_screen_video.mp4" type=video/mp4>
-  </video> -->
+    <div id="overlay" class="show" role="dialog" aria-modal="true">
+      <div class="card">
+        <h2>Enable your camera</h2>
+        <p>We render live 3D cubes using your face as textures. Nothing is uploaded.</p>
+        <p class="note">If you’re in an in‑app browser (Telegram/IG/VK), tap <b>Open in Browser</b>.</p>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
+          <button id="btnStart" class="btn primary">Allow Camera</button>
+          <button id="btnTest" class="btn">Test Only</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- hidden capture surfaces -->
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="cNose" width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cEyeL" width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cEyeR" width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cMouth" width="300" height="150" class="sr-only"></canvas>
+  </main>
+
+  <footer>
+    <button id="btnShuffle" class="btn">Shuffle</button>
+    <button id="btnCapture" class="btn primary">Capture</button>
+  </footer>
 </div>
 
-<!-- <canvas id="canvas_loading" width="300" height="300" style="font-family: 'PleasureStandard-Regular'; display: none;"> </canvas>  -->
+<p id="status" aria-live="polite"></p>
 
-<section id="permission-screen">
-  <div id="loader">Please allow camera access to expereince this website.  <br>Your video will not be stored anywhere.
-  </div>
-  <button id="button_loader">Continue
-  </button>
-</section>
-  
-  <div id="container" style="display: none;"></div>
-  
-  <!-- <canvas id="canvas" width="480" height="640"></canvas> -->
-  
+<script>
+// ===== Small helpers =====
+const $ = (sel) => document.querySelector(sel);
+const on = (el, ev, cb) => el.addEventListener(ev, cb);
+const log = (msg) => { const s = $('#status'); s.textContent = msg; };
+const lerp = (a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
+const dist = (x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
 
-  <canvas id="canvas04" width="300" height="300" style="display: none"></canvas>
-  <canvas id="canvas01" width="300" height="300" style="display: none"></canvas>
-  <canvas id="canvas02" width="300" height="150" style="display: none"></canvas>
-  <canvas id="Mycanvas" width="300" height="300" style="display: none"></canvas>
-  <video autoplay muted playsinline id="video" width="480" height="640" style="opacity:0; width:0; height:auto;"></video>
+// ===== State =====
+let video = $('#video');
+let stream = null;
+let scene, camera, renderer, controls;
+let texNose, texEyeL, texEyeR, texMouth;
+let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
+let noseX=0,noseY=0,leX=0,leY=0,reX=0,reY=0,mX=0,mY=0;
+let started = false;
 
-  <!-- <video autoplay muted playsinline id="video" width="480" height="640"></video> -->
+// Canvas contexts
+const cNose = $('#cNose'), cEyeL = $('#cEyeL'), cEyeR = $('#cEyeR'), cMouth = $('#cMouth');
+const ctxN = cNose.getContext('2d');
+const ctxL = cEyeL.getContext('2d');
+const ctxR = cEyeR.getContext('2d');
+const ctxM = cMouth.getContext('2d');
 
+// ===== UI =====
+on($('#btnInfo'), 'click', ()=> alert('Selfie Cubes renders your face into 3D cubes using PoseNet (runs fully in your browser). No data leaves your device.'));
 
-  <div id="discription">
-    <p class="intro">
-      Click or drag to find your best angle 
-    </p>
-  </div> 
-
-  <div id="frame">
-    <p class="desktop_view">
-      This website can only be viewed on a phone.
-    </p>
-  </div> 
-
-
-<div id="about">
-  <div id="aboutText">
-    <p class="explain">
-    Take a Selfie
-    <br></br>
-    is a website that explores a new way to create a selfie using 3D rendering and face detection technologies. 
-    You can play around by clicking and dragging to find your best angle. 
-    </p>
-    <p class="credits">
-    Technologies:
-    <br>
-    <a href="https://threejs.org/" style=""> Three.js</a> & <a href="https://learn.ml5js.org/#/reference/posenet">ml5js</a> (PoseNet)
-    <br></br>
-    Design and coding:
-    <br>
-    <a href="https://www.instagram.com/sapir__m/"> Sapir Mashiach</a>
-    </p>
-  </div>
-  <button class="questionButton" id="aboutButton">Info</button>
-</div> 
-
-<div id="download_div">
-<button class="downloadButton" id="download">
-	Capture
-</button>
-</div>
-
-</body>
-
-<script type="text/javascript">
-// type="module"
-
-// import * as THREE from '/Face/build/three.module.js';
-// import { OrbitControls } from '/Face/examples/jsm/controls/OrbitControls.js';
-// import { Reflector } from '/Face/examples/jsm/objects/Reflector.js';
-// import { RGBELoader } from '/Face/examples/jsm/loaders/RGBELoader.js';
-// import { GUI } from '/Face/examples/jsm/libs/dat.gui.module.js';
-// import { RectAreaLightUniformsLib } from '/Face/examples/jsm/lights/RectAreaLightUniformsLib.js';
-// import { ColladaLoader } from '/Face/examples/jsm/loaders/ColladaLoader.js';		
-
-// scene size
-var WIDTH = window.innerWidth;
-var HEIGHT = window.innerHeight;
-
-var SHADOW_MAP_WIDTH = WIDTH, SHADOW_MAP_HEIGHT = HEIGHT;
-
-// camera
-var VIEW_ANGLE = 35;
-var ASPECT = WIDTH / HEIGHT;
-var NEAR = 1;
-var FAR = 2000;
-
-var camera, scene, renderer, light1, controls;
-var mouseX = 0, mouseY = 0;
-
-var new_texture;
-
-var windowHalfX = window.innerWidth / 2;
-var windowHalfY = window.innerHeight / 2;
-
-//new code
-var material;
-var material01;
-var material02;
-var material03;
-var material_load;
-var dirLight;
-
-var cubeCamera, cubeRenderTarget;
-var cube01;
-var cube02;
-var cube03;
-var cube04;
-var cube05;
-
-let noseX = 0;
-let noseY = 0;
-let left_eyeX = 0;
-let left_eyeY = 0;
-let right_eyeX = 0;
-let right_eyeY = 0;
-let mouthX = 0;
-let mouthY = 0;
-
-var nose;
-var texture_try;
-var box_list = [];
-
-var ran_noseX;
-var ran_noseY;
-var ran_eye1X;
-var ran_eye1Y;
-var ran_eye2X;
-var ran_eye2Y;
-var ran_mouthX;
-var ran_mouthY;
-var position;
-var poseNet;
-
-var counter = 0;
-var disable_refresh_position = false;
-var clicked_about = false;
-var clicked_dis = false;
-var download_mouseIsOver = false;
-let drag = false;
-
-var video = document.getElementById("video");
-// var canvas = document.getElementById("canvas");
-// var ctx_try = canvas.getContext("2d");
-
-var scale;
-var w;
-var h;
-var first_time = true;
-// var vRatio;
-var RatioX;
-var RatioY;
-
-var nose_canvas = document.getElementById("canvas04");
-var ctx = nose_canvas.getContext("2d");
-
-var eye_canvas = document.getElementById("Mycanvas");
-var ctx01 = eye_canvas.getContext("2d");
-
-var eye2_canvas = document.getElementById("canvas01");
-var ctx02 = eye2_canvas.getContext("2d");
-
-var mouth_canvas = document.getElementById("canvas02");
-var ctx03 = mouth_canvas.getContext("2d");
-
-// var load_canvas = document.getElementById("canvas_loading");
-// var load = load_canvas.getContext("2d");
-
-// The detected positions will be inside an array
-let poses = [];
-
-
-
-$("#download").on("click", function(){
-	var dataURL = renderer.domElement.toDataURL();	
-	var link = document.createElement("a");
-	link.download = "selfie.png";
-	link.href = dataURL;
-	link.target = "_blank";
-	link.click();
-     
-});
-
-$("#aboutButton").on("click", function(){
-  disable_refresh_position = !disable_refresh_position;
-  clicked_about = true;
-  $("#aboutText").fadeToggle('fast');
-  $("#aboutButton").text(($("#aboutButton").text() == 'Info') ? 'Close' : 'Info').fadeIn();         
-});
-
-
-$("#container").on('touchstart mousedown', function(){	
-  $("#discription").fadeOut('fast');                
-});
-
-$("#discription").on('touchstart mousedown', function(){	
-  $("#discription").fadeOut('fast');                
-});
-
-
-// $('body').on('click touchstart', function () {
-//         const videoElement = document.getElementById('loading_video');
-//         if (videoElement.playing) {
-//             // video is already playing so do nothing
-//         }
-//         else {
-//             // video is not playing
-//             // so play video now
-//             videoElement.play();
-//         }
-// });
-
-
-function isAndroid() {
-  return (/Android/i.test(navigator.userAgent)
-  );
-}
-
-function isiOS() {
-  return (/iPhone|iPad|iPod/i.test(navigator.userAgent)
-  );
-}
-
-function isMobile() {
-  return isAndroid() || isiOS();
-}
-
-// A function to draw ellipses over the detected keypoints
-function drawKeypoints() {
-  // Loop through all the poses detected
-  for (let i = 0; i < poses.length; i += 1) {
-    // For each pose detected, loop through all the keypoints
-    for (let j = 0; j < poses[i].pose.keypoints.length; j += 1) {
-      let keypoint = poses[i].pose.keypoints[j];
-      // Only draw an ellipse is the pose probability is bigger than 0.2
-      if (keypoint.score > 0.2) {
-
-        RatioX = video.width/canvas.width;
-        RatioY = video.height/canvas.height;
-
-        ctx_try.beginPath();
-        ctx_try.arc(keypoint.position.x, keypoint.position.y, 10, 0, 2 * Math.PI);
-        ctx_try.stroke();
-      }
+on($('#btnStart'), 'click', async ()=>{
+  try {
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      alert('This demo requires HTTPS to access the camera.');
+      return;
     }
+    $('#overlay').classList.remove('show');
+    log('Requesting camera…');
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false });
+    video.srcObject = stream; await video.play();
+    log('Camera ok. Loading PoseNet…');
+    boot();
+  } catch (err) {
+    console.error(err);
+    alert(`Camera error: ${err.name} — ${err.message}`);
+    $('#overlay').classList.add('show');
+    log('Camera access denied. Please enable camera permissions.');
   }
-}
-
-
-
-function videoDimensions(video) {
-  // Ratio of the video's intrisic dimensions
-  var videoRatio = video.videoWidth / video.videoHeight;
-  // The width and height of the video element
-  var width = video.offsetWidth, height = video.offsetHeight;
-  // The ratio of the element's width to its height
-  var elementRatio = width/height;
-  // If the video element is short and wide
-  if(elementRatio > videoRatio) width = height * videoRatio;
-  // It must be tall and thin, or exactly equal to the original ratio
-  else height = width / videoRatio;
-  return {
-    width: width,
-    height: height
-  };
-}
-
-// var print_counter = 0;
-// function drawCameraIntoCanvas() {
-//   // Draw the video element into the canvas
-//     print_counter++;
-
-//     var real_video_size = videoDimensions(video);
-//     if(counter%1000 == 0){
-//       console.log("**********************");      
-//       console.log("video.videoWidth: " + video.videoWidth);
-//       console.log("video.videoHeight: " + video.videoHeight);
-//       console.log("video.width: " + video.width);
-//       console.log("video.height: " + video.height);
-//       console.log("video.offsetWidth: " + video.offsetWidth);
-//       console.log("video.offsetHeight: " + video.offsetHeight);
-//       console.log("canvas.width: " + canvas.width);
-//       console.log("canvas.height: " + canvas.height);
-//       console.log("canvas.clientWidth: " + canvas.clientWidth);
-//       console.log("canvas.clientHeight: " + canvas.clientHeight);
-//       console.log("real width: " + real_video_size.width);
-//       console.log("real height: " + real_video_size.height);
-//       console.log("**********************");
-//     }
-//     ctx_try.drawImage(video, 0 ,0 , canvas.width, canvas.height);
-
-//   drawKeypoints();
-//   window.requestAnimationFrame(drawCameraIntoCanvas);
-// }
-
-
-// Get the linear interpolation between two value
-function lerp(value1, value2, amount) {
-  amount = amount < 0 ? 0 : amount;
-  amount = amount > 1 ? 1 : amount;
-  return value1 + (value2 - value1) * amount;
-}
-
-function dist(x1, y1, x2, y2) {
-  return Math.sqrt(Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2));
-}
-
-// A function that gets called every time there's an update from the model
-function gotPoses(results) {
-  poses = results;
-  // console.log(poses);
-  if (poses.length > 0) {
-    let nX = poses[0].pose.keypoints[0].position.x;
-    let nY = poses[0].pose.keypoints[0].position.y;
-    let leX = poses[0].pose.keypoints[1].position.x;
-    let leY = poses[0].pose.keypoints[1].position.y;
-
-    let reX = poses[0].pose.keypoints[2].position.x;
-    let reY = poses[0].pose.keypoints[2].position.y;
-
-    let leaX = poses[0].pose.keypoints[3].position.x;
-    let leaY = poses[0].pose.keypoints[3].position.y;
-
-    let reaX = poses[0].pose.keypoints[4].position.x;
-    let reaY = poses[0].pose.keypoints[4].position.y;
-
-    noseX = lerp(noseX, nX, 0.5);
-    noseY = lerp(noseY, nY, 0.5);
-
-    left_eyeX = lerp(left_eyeX, leX, 0.5);
-    left_eyeY = lerp(left_eyeY, leY, 0.5);
-
-    right_eyeX = lerp(right_eyeX, reX, 0.5);
-    right_eyeY = lerp(right_eyeY, reY, 0.5);
-
-
-    let dm = dist(noseX, noseY, left_eyeX, left_eyeY);
-    let mX = poses[0].pose.keypoints[0].position.x;
-    let mY = poses[0].pose.keypoints[0].position.y + dm;
-    mouthX = lerp(mouthX, mX, 0.5);
-    mouthY = lerp(mouthY, mY, 0.5);
-
-  }
-  else{
-    console.log('no poses found');
-  }
-
-}
-
-function modelReady() {
-  console.log("model ready");
-  // poseNet.multiPose(video);
-}
-
-
-
-// main entry point
-if ($(window).width() < 801) {
-
-init();
-animate(); 
- 
-
-// let f = new FontFace('PleasureStandard-Regular', 'url(PleasureStandard-Regular.otf)');
-
-// f.load().then(function() {
-//   load.font = '40px "PleasureStandard-Regular"';
-
-//   load.fillStyle = 'white';
-//   load.textAlign = 'center';
-//   load.fillText('Loading...', 150, 160);
-//   // Ready to use the font in a canvas context
-// });
-
-
-var buttonclicked; 
-
-$("#button_loader").click(function(){ 
-if( buttonclicked!= true ) { 
-// Create a webcam capture
-if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-  navigator.mediaDevices.getUserMedia({
-    // video: true
-    video: {  
-      facingMode: 'user',
-    }
-  }).then(function(stream) {
-    // $("#loading-screen").show('slow');
-    document.getElementById("loading-screen").style.display = 'block';
-    video.srcObject = stream;
-    video.play();
-    setTimeout(function(){
-   $('#loading-screen').fadeOut('fast');   
-   $('#discription').fadeIn('slow');
-   $("#aboutButton").fadeIn('slow');
-   $("#container").fadeIn('slow');
-   $(".downloadButton").fadeIn('slow');
-}, 8000);
-  }).catch(function(err) {
-    console.log(err);
-  });
-}   
-$("#permission-screen").fadeOut('slow');      
-}
-else{ 
-    alert("Button was clicked before"); 
-} 
 });
 
+on($('#btnTest'), 'click', ()=>{ $('#overlay').classList.remove('show'); boot(true); });
 
-// Loop over the drawCameraIntoCanvas function
-// drawCameraIntoCanvas();
+on($('#btnCapture'), 'click', ()=>{
+  if (!renderer) return;
+  const a = document.createElement('a');
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.download = 'selfie.png'; a.click();
+});
 
-// Create a new poseNet method with a single detection
-poseNet = ml5.poseNet(video, modelReady);
-poseNet.on("pose", gotPoses);
+on($('#btnShuffle'), 'click', ()=> shuffleCubes());
 
-// end of main
-
-var loadingManager;
-
-// three.js code
-function init() {
-
-  // scene
+// ===== Init 3D =====
+function initThree(){
+  const WIDTH = innerWidth, HEIGHT = innerHeight;
   scene = new THREE.Scene();
-  var container = document.getElementById('container');
-
-  // renderer
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    preserveDrawingBuffer: true,
-  });
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+  renderer.setPixelRatio(devicePixelRatio||1);
   renderer.setSize(WIDTH, HEIGHT);
-  container.appendChild(renderer.domElement);
-  renderer.setClearColor('#000000');
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  // camera
-  camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
-  camera.position.z = 281;
-  camera.position.y = 0;
-
+  $('#container').appendChild(renderer.domElement);
+  camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
+  camera.position.set(0,0,281);
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.minDistance = 600;
-  controls.maxDistance = 600;
-  controls.enablePan = false;
-  controls.enableZoom = false;
-  controls.enableRotate = true;
-  controls.rotateSpeed = 1.0;
-
-//   document.addEventListener( 'pointerdown', onMouseClick, false );
-  
-  document.addEventListener('pointerdown', () => drag = false);
-  
-  document.addEventListener('pointermove', () => drag = true);
-  
-  document.addEventListener('pointerup', onPointerUp); 
-
-  var fogs = [
-    0xBDE3F4,
-    0x1A1F21,
-    0xf2eedd
-  ]
-
+  controls.enablePan = false; controls.enableZoom = false; controls.rotateSpeed = 1.0; controls.minDistance=600; controls.maxDistance=600;
   scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
+  scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
+  const dir = new THREE.DirectionalLight(0xffffff,0.4); dir.position.set(-3000,4000,3000); scene.add(dir);
 
-  //LIGHTS
+  texNose  = new THREE.CanvasTexture(cNose);
+  texEyeL  = new THREE.CanvasTexture(cEyeL);
+  texEyeR  = new THREE.CanvasTexture(cEyeR);
+  texMouth = new THREE.CanvasTexture(cMouth);
 
-  light1 = new THREE.SpotLight(0xffffff, 0.3, 0, Math.PI / 2);
-  light1.position.set(2000, 4000, -3000);
-  light1.target.position.set(1, 1, 1);
-  light1.castShadow = true;
-  light1.shadow = new THREE.LightShadow(new THREE.PerspectiveCamera(20, 10, 100, 20000));
-  light1.shadow.bias = 0.0001;
-  light1.shadow.camera.near = NEAR;
-  light1.shadow.camera.far = FAR;
-  light1.shadow.camera.fov = 15;
+  cubeNose = new THREE.Mesh(new THREE.BoxGeometry(50,80,50), new THREE.MeshBasicMaterial({ map: texNose }));
+  cubeEyeL = new THREE.Mesh(new THREE.BoxGeometry(50,50,50), new THREE.MeshBasicMaterial({ map: texEyeL }));
+  cubeEyeR = new THREE.Mesh(new THREE.BoxGeometry(50,50,50), new THREE.MeshBasicMaterial({ map: texEyeR }));
+  cubeMouth= new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
 
-  light1.shadow.mapSize.width = SHADOW_MAP_WIDTH;
-  light1.shadow.mapSize.height = SHADOW_MAP_HEIGHT;
-
-  light1.shadow.camera.right = 50000;
-  light1.shadow.camera.left = -50000;
-  light1.shadow.camera.top = 50000;
-  light1.shadow.camera.bottom = -50000;
-
-  var hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8);
-  hemiLight.position.set(100, 500, 0);
-  scene.add(hemiLight);
-
-  dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
-  dirLight.position.set(-3000, 4000, 3000);
-  scene.add(dirLight);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 3048;
-  dirLight.shadow.mapSize.height = 3048;
-
-  var d = 1500;
-
-  dirLight.shadow.camera.left = -d;
-  dirLight.shadow.camera.right = d;
-  dirLight.shadow.camera.top = d;
-  dirLight.shadow.camera.bottom = -d;
-  dirLight.shadow.camera.near = 40;
-  dirLight.shadow.camera.far = 10000;
-  dirLight.shadow.bias = 0.00001;
-  dirLight.shadow.darkness = 0.2;
-
-  var nose_texture = new THREE.CanvasTexture(nose_canvas);
-  var eye_texture = new THREE.CanvasTexture(eye_canvas);
-  var eye2_texture = new THREE.CanvasTexture(eye2_canvas);
-  var mouth_texture = new THREE.CanvasTexture(mouth_canvas);
-
-  // var load_texture = new THREE.CanvasTexture(load_canvas);
-
-  // var geometry_load = new THREE.PlaneGeometry(100, 100);
-  // material_load = new THREE.MeshBasicMaterial({
-  //   map: load_texture,
-  //   transparent: true, 
-  //   side: THREE.DoubleSide,
-  // });
-  // cube05 = new THREE.Mesh(geometry_load, material_load);
-  // cube05.position.x = 0;
-  // cube05.position.y = 0;
-  // cube05.position.z = 0;
-  // scene.add(cube05);
- 
-
-  var geometry = new THREE.BoxGeometry(50, 80, 50);
-  material = new THREE.MeshBasicMaterial({
-    map: nose_texture,
+  scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
+  shuffleCubes();
+  addEventListener('resize', ()=>{
+    const W = innerWidth, H = innerHeight; renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
   });
-  cube01 = new THREE.Mesh(geometry, material);
-  cube01.position.x = 30;
-  cube01.position.y = -130;
-  cube01.position.z = 0;
-  cube01.rotation.y = getRandomArbitrary(0.1, 0.5);
-  scene.add(cube01);
+}
 
+function shuffleCubes(){
+  const rnd = (a,b)=>Math.random()*(b-a)+a;
+  cubeNose.position.set(rnd(-55,55),  rnd(-140,140), 0); cubeNose.rotation.y = rnd(0.1,0.5);
+  cubeEyeL.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeL.rotation.y = rnd(0.1,0.5);
+  cubeEyeR.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeR.rotation.y = rnd(0.1,0.5);
+  cubeMouth.position.set(rnd(-45,45), rnd(-155,155), 0); cubeMouth.rotation.y = rnd(0.1,0.5);
+}
 
-  var geometry01 = new THREE.BoxGeometry(50, 50, 50);
-  material01 = new THREE.MeshBasicMaterial({
-    map: eye_texture,
+// ===== PoseNet =====
+function startPoseNet(){
+  const net = ml5.poseNet(video, ()=> log('PoseNet ready'));
+  net.on('pose', (results)=>{
+    if (!results.length) return;
+    const k = results[0].pose.keypoints;
+    const nX = k[0].position.x, nY = k[0].position.y;
+    const Lx = k[1].position.x, Ly = k[1].position.y;
+    const Rx = k[2].position.x, Ry = k[2].position.y;
+    noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
+    leX = lerp(leX,Lx,.5);    leY = lerp(leY,Ly,.5);
+    reX = lerp(reX,Rx,.5);    reY = lerp(reY,Ry,.5);
+    const d = dist(noseX,noseY,leX,leY);
+    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);
   });
-  cube02 = new THREE.Mesh(geometry01, material01);
-  cube02.position.x = -30;
-  cube02.position.y = -30;
-  cube02.position.z = 0;
-  cube02.rotation.y = getRandomArbitrary(0.1, 0.5);
-  scene.add(cube02);
-
-
-  var geometry02 = new THREE.BoxGeometry(50, 50, 50);
-  material02 = new THREE.MeshBasicMaterial({
-    map: eye2_texture,
-  });
-  cube03 = new THREE.Mesh(geometry02, material02);
-  cube03.position.x = 50;
-  cube03.position.y = 80;
-  cube03.position.z = 0;
-  cube03.rotation.y = getRandomArbitrary(0.1, 0.5);
-  scene.add(cube03);
-
-  var geometry03 = new THREE.BoxGeometry(100, 45, 45);
-  material03 = new THREE.MeshBasicMaterial({
-    map: mouth_texture,
-  });
-  cube04 = new THREE.Mesh(geometry03, material03);
-  cube04.position.x = -40;
-  cube04.position.y = 100;
-  cube04.position.z = 0;
-  cube04.rotation.y = getRandomArbitrary(0.1, 0.5);
-  scene.add(cube04);
-
-
 }
 
-function getRandomArbitrary(min, max) {
-  return Math.random() * (max - min) + min;
+// ===== Render loop =====
+function loop(){
+  requestAnimationFrame(loop);
+  const d = dist(noseX,noseY,leX,leY) || 120;
+  // crop from video into canvases
+  try {
+    ctxN.drawImage(video, noseX-d/2, noseY-d/2, d+0.01, d+0.01, 0,0,300,300);
+    ctxL.drawImage(video, leX  -d/2, leY  -d/2, d+0.01, d+0.01, 0,0,300,300);
+    ctxR.drawImage(video, reX  -d/2, reY  -d/2, d+0.01, d+0.01, 0,0,300,300);
+    ctxM.drawImage(video, mX   -d/2, mY   -d/2, d+0.01, d+0.01, 0,0,300,150);
+  } catch(e) { /* ignore until first pose */ }
+
+  // refresh textures
+  if (texNose)  texNose.needsUpdate  = true;
+  if (texEyeL)  texEyeL.needsUpdate  = true;
+  if (texEyeR)  texEyeR.needsUpdate  = true;
+  if (texMouth) texMouth.needsUpdate = true;
+
+  if (renderer && camera && scene){ camera.lookAt(scene.position); renderer.render(scene,camera); controls && controls.update(); }
 }
 
-function onPointerUp(e){
-  if (!drag) {
-    onMouseClick(e);
-  }
-  // console.log(drag ? 'drag' : 'click');
+// ===== Boot =====
+function boot(testMode=false){
+  if (started) return; started = true;
+  initThree();
+  if (!testMode) startPoseNet();
+  loop();
 }
-
-function ChangePosition() {
-  var boxes_distance = 0;
-  var boxes_distance02 = 0;
-  var boxes_distance03 = 0;
-  var boxes_distance04 = 0;
-  var boxes_distance05 = 0;
-  var boxes_distance06 = 0;
-  do {
-	  cube01.rotation.y = getRandomArbitrary(0.1, 0.5);
-	  cube02.rotation.y = getRandomArbitrary(0.1, 0.5);
-	  cube03.rotation.y = getRandomArbitrary(0.1, 0.5);
-	  cube04.rotation.y = getRandomArbitrary(0.1, 0.5);
-
-	  cube01.position.x = getRandomArbitrary(-55, 55);
-	  cube01.position.y = getRandomArbitrary(-140, 140);
-
-	  cube02.position.x = getRandomArbitrary(-50, 50);
-	  cube02.position.y = getRandomArbitrary(-150, 150);
-
-	  cube03.position.x = getRandomArbitrary(-50, 50);
-	  cube03.position.y = getRandomArbitrary(-150, 150);
-
-	  cube04.position.x = getRandomArbitrary(-45, 45);
-	  cube04.position.y = getRandomArbitrary(-155, 155);
-
-	  boxes_distance = dist(cube01.position.x, cube01.position.y,  cube02.position.x, cube02.position.y);
-	  boxes_distance02 = dist(cube02.position.x, cube02.position.y,  cube03.position.x, cube03.position.y);
-	  boxes_distance03 = dist(cube01.position.x, cube01.position.y,  cube03.position.x, cube03.position.y);
-	  boxes_distance04 = dist(cube03.position.x, cube03.position.y,  cube04.position.x, cube04.position.y);
-	  boxes_distance05 = dist(cube02.position.x, cube02.position.y,  cube04.position.x, cube04.position.y);
-	  boxes_distance06 = dist(cube01.position.x, cube01.position.y,  cube04.position.x, cube04.position.y);
-  }
-  while(boxes_distance < 100 || boxes_distance02 < 100 || boxes_distance03 < 100 || boxes_distance04 < 100 || boxes_distance05 < 100 || boxes_distance06 < 100)
-  // prevent default
-  return false;
-}
-
-function getOffset(el) {
-  const rect = el.getBoundingClientRect();
-  return {
-    left: rect.left,
-    top: rect.top
-  };
-}
-
-
-function onMouseClick(e) {
-
-
-  var download_x = getOffset(document.getElementById("download")).left;
-  var download_y = getOffset(document.getElementById("download")).top;
-  var info_x = getOffset(document.getElementById("aboutButton")).left;
-  var info_y = getOffset(document.getElementById("aboutButton")).top;
-  var click_x = e.pageX;
-  var click_y = e.pageY;
-
-  var download_clicked = (click_x - download_x) > -5 && Math.abs(click_y - download_y) < 25;
-  var info_clicked = Math.abs(click_x - info_x) < 35 && Math.abs(click_y - info_y) < 25;
- 
-
-  if (!disable_refresh_position && !clicked_about && !download_clicked && !info_clicked) {
-    ChangePosition();
-  }
-  
-  clicked_about = false;
-  material.map.needsUpdate = true;
-  // counter++;
-}
-
-window.onresize = function(event) {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-};
-
-function animate() {
-  let d = dist(noseX, noseY, left_eyeX, left_eyeY);
-  // console.log(d); 
-  ctx.drawImage(video, noseX - d / 2, noseY - d / 2, d + 0.01, d + 0.01, 0, 0, 300, 300);
-  ctx01.drawImage(video, left_eyeX - d / 2, left_eyeY - d / 2, d + 0.01, d + 0.01, 0, 0, 300, 300);
-  ctx02.drawImage(video, right_eyeX - d/2,right_eyeY-d/2, d+0.01, d+0.01, 0, 0, 300,300);
-  ctx03.drawImage(video, mouthX - d/2,mouthY-d/2, d+0.01, d+0.01, 0, 0, 300,150);
-
-  // cube05.rotation.y += 0.02;
-  requestAnimationFrame(animate);
-  render();
-  controls.update();
-}
-
-
-
-function render() {
-
-  material.map.needsUpdate = true;
-  material01.map.needsUpdate = true;
-  material02.map.needsUpdate = true;
-  material03.map.needsUpdate = true;
-  // material_load.map.needsUpdate = true;
-  // camera.position.x += (mouseX - camera.position.x) * .05;
-  // dirLight.position.x += (mouseX - dirLight.position.x - 1000) * .05;
-
-  camera.lookAt(scene.position);
-  // camera.updateProjectionMatrix();
-  renderer.render(scene, camera);
-}	
-
-
-
-
-}			
-</script>		
-</html>		
+</script>
+</body>
+</html>
