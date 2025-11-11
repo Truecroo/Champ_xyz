@@ -10,11 +10,11 @@
 
   <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- ВНИМАНИЕ: OrbitControls убрали, чтобы не было ошибки конструктора -->
 
-  <!-- TFJS + MediaPipe FaceMesh + ml5 -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-  <script src="https://unpkg.com/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
+  <!-- MediaPipe FaceMesh (нативно) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+
+  <!-- ml5 для PoseNet (fallback) -->
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <link rel="stylesheet" href="selfie.css" />
@@ -70,7 +70,7 @@
     <div id="aboutText">
       <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
-        Технологии: <a href="https://threejs.org/">Three.js</a> и <a href="https://learn.ml5js.org/#/reference/facemesh">ml5</a>
+        Технологии: <a href="https://threejs.org/">Three.js</a>, <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a> и <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
       </p>
     </div>
     <button class="questionButton" id="aboutButton">Инфо</button>
@@ -86,12 +86,6 @@
   video.setAttribute('playsinline','true');
   video.setAttribute('muted','true');
   video.muted = true;
-  video.addEventListener('loadedmetadata', () => {
-    if (video.videoWidth && video.videoHeight) {
-      video.width  = video.videoWidth;
-      video.height = video.videoHeight;
-    }
-  });
 
   const nose_canvas  = document.getElementById("canvas04"); const ctxNose  = nose_canvas.getContext("2d");
   const left_canvas  = document.getElementById("Mycanvas"); const ctxLEye  = left_canvas.getContext("2d");
@@ -114,8 +108,13 @@
   let presetIndex = 0;
 
   // ===== Лендмарки/боксы =====
+  let faceMeshReady = false;
   let firstPredictionCame = false;
+
+  // боксы от FaceMesh:
   window._bbNose = null; window._bbLEye = null; window._bbREye = null; window._bbMouth = null;
+
+  // PoseNet (fallback) значения:
   let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 
   // ===== UI =====
@@ -135,7 +134,15 @@
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
       video.srcObject = stream;
+
+      if (video.readyState < 1) await new Promise(r => (video.onloadedmetadata = r));
       await video.play();
+
+      // зафиксировать реальные размеры под кроп
+      await new Promise(r=>setTimeout(r,50));
+      video.width  = video.videoWidth  || 480;
+      video.height = video.videoHeight || 640;
+
       return true;
     } catch (err) {
       console.error('[getUserMedia error]', err.name, err.message);
@@ -165,52 +172,96 @@
     $("#aboutButton").fadeIn('slow');
     $("#loading-screen").fadeOut('fast');
 
-    bootML();   // FaceMesh + PoseNet
     initThree();
+    bootTrackers();   // FaceMesh (нативно) + PoseNet (fallback)
     animate();
   });
 
-  // ===== Инициализация моделей =====
-  function bootML(){
-    // FaceMesh
+  // ===== Инициализация трекеров =====
+  function bootTrackers(){
+    // 1) MediaPipe FaceMesh — основной
     try {
-      const fm = ml5.faceMesh(video, () => console.log('FaceMesh готов'));
-      fm.on('predict', gotFaces);
-    } catch(e) { console.warn('FaceMesh не запустился:', e); }
+      const fm = new FaceMesh.FaceMesh({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+      });
+      fm.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+      fm.onResults(onFaceMeshResults);
+      faceMeshReady = true;
 
-    // PoseNet — бэкап
+      // собственный «пульс» вызовов — без camera_utils, чтобы не ломать наш поток
+      let busy = false;
+      async function pump() {
+        if (faceMeshReady && !busy && video.videoWidth) {
+          busy = true;
+          try { await fm.send({ image: video }); } catch(_) {}
+          busy = false;
+        }
+        requestAnimationFrame(pump);
+      }
+      pump();
+      console.log('FaceMesh запущен');
+    } catch(e) {
+      console.warn('FaceMesh не запустился:', e);
+      faceMeshReady = false;
+    }
+
+    // 2) ml5 PoseNet — бэкап
     try {
       const net = ml5.poseNet(video, () => console.log('PoseNet готов'));
-      net.on('pose', gotPoses);
-    } catch(e) { console.warn('PoseNet не запустился:', e); }
-  }
-
-  // FaceMesh → bbox
-  function gotFaces(results){
-    if (!results || !results.length) return;
-    firstPredictionCame = true;
-    const pts = results[0].scaledMesh;
-    const leftEyeIdx = [33,133,160,159,158,157,173];
-    const rightEyeIdx= [362,263,387,386,385,384,398];
-    const noseIdx    = [1,6,197,195,5,4,45];
-    const mouthIdx   = [78,95,88,178,87,14,317,308,324];
-
-    function bbox(idxs){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-      for(const i of idxs){ const p=pts[i]; if(!p) continue; const x=p[0],y=p[1];
-        if(x<minX) minX=x; if(y<minY) minY=y; if(x>maxX) maxX=x; if(y>maxY) maxY=y; }
-      return {x:minX,y:minY,w:Math.max(1,maxX-minX),h:Math.max(1,maxY-minY)};
+      net.on('pose', onPoseNetResults);
+    } catch(e) {
+      console.warn('PoseNet не запустился:', e);
     }
-    function pad(b,p=10){ return {x:b.x-p,y:b.y-p,w:b.w+2*p,h:b.h+2*p}; }
-
-    window._bbNose  = pad(bbox(noseIdx), 10);
-    window._bbLEye  = pad(bbox(leftEyeIdx), 10);
-    window._bbREye  = pad(bbox(rightEyeIdx), 10);
-    window._bbMouth = pad(bbox(mouthIdx), 12);
   }
 
-  // PoseNet → fallback боксы
-  function gotPoses(res){
+  // ===== Обработчик FaceMesh
+  function onFaceMeshResults(res){
+    const faces = res.multiFaceLandmarks || [];
+    if (!faces.length) return;
+    firstPredictionCame = true;
+
+    const pts = faces[0]; // массив из 468 точек с x,y,z в нормированных долях кадра
+    // Индексы (аналогично твоим наборам)
+    const IDX = {
+      leftEye:  [33,133,160,159,158,157,173],
+      rightEye: [362,263,387,386,385,384,398],
+      nose:     [1,6,197,195,5,4,45],
+      mouth:    [78,95,88,178,87,14,317,308,324]
+    };
+
+    function bboxNorm(idxs){
+      let minX=1,minY=1,maxX=0,maxY=0;
+      for (const i of idxs){
+        const p = pts[i]; if(!p) continue;
+        const x = p.x, y = p.y; // уже 0..1
+        if (x<minX) minX=x; if (y<minY) minY=y;
+        if (x>maxX) maxX=x; if (y>maxY) maxY=y;
+      }
+      return {x:minX, y:minY, w:Math.max(1e-3,maxX-minX), h:Math.max(1e-3,maxY-minY)};
+    }
+    function toPixels(b, pad=0.03){
+      const vw = video.videoWidth || video.width || 480;
+      const vh = video.videoHeight || video.height || 640;
+      const px = Math.max(0, b.x - pad) * vw;
+      const py = Math.max(0, b.y - pad) * vh;
+      const pw = Math.min(1, b.w + pad*2) * vw;
+      const ph = Math.min(1, b.h + pad*2) * vh;
+      return { x:px, y:py, w:pw, h:ph };
+    }
+
+    window._bbLEye  = toPixels(bboxNorm(IDX.leftEye),  0.04);
+    window._bbREye  = toPixels(bboxNorm(IDX.rightEye), 0.04);
+    window._bbNose  = toPixels(bboxNorm(IDX.nose),     0.05);
+    window._bbMouth = toPixels(bboxNorm(IDX.mouth),    0.05);
+  }
+
+  // ===== Обработчик PoseNet (fallback как в исходнике)
+  function onPoseNetResults(res){
     if (!res || !res.length) return;
     const k = res[0].pose.keypoints;
     const nX = k[0].position.x, nY = k[0].position.y;
@@ -227,13 +278,16 @@
 
     const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
     const sz = Math.max(40, Math.min(300, d));
-    window._bbNose  = makeBox(noseX, noseY, sz);
-    window._bbLEye  = makeBox(leX,   leY,   sz);
-    window._bbREye  = makeBox(reX,   reY,   sz);
-    window._bbMouth = { x:mX - sz/2, y:mY - sz/2, w:sz, h:sz*0.5 };
+    // Используем PoseNet-боксы только если FaceMesh пока не дал результатов
+    if (!firstPredictionCame) {
+      window._bbNose  = makeBox(noseX, noseY, sz);
+      window._bbLEye  = makeBox(leX,   leY,   sz);
+      window._bbREye  = makeBox(reX,   reY,   sz);
+      window._bbMouth = { x:mX - sz/2, y:mY - sz/2, w:sz, h:sz*0.5 };
+    }
   }
 
-  // ===== Three setup (без OrbitControls) =====
+  // ===== Three setup (без OrbitControls)
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -346,6 +400,7 @@
   function animate(){
     requestAnimationFrame(animate);
 
+    // Если есть боксы — режем; иначе весь кадр (кубы видны сразу)
     const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
     if (hasLM) {
       drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
