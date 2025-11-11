@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>Take a Selfie — 3D PoseNet</title>
+
+  <!-- Three.js + OrbitControls (same version) -->
+  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- TensorFlow.js + PoseNet + ml5 (kept as in source for compatibility) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  <script src="https://unpkg.com/@tensorflow-models/posenet@1.0.3/dist/posenet.min.js"></script>
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+
+  <!-- Utilities -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ismobilejs@1/dist/isMobile.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.min.js"></script>
+
+  <!-- Minimal inline styles so we don't need external assets -->
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+    #container { position: fixed; inset: 0; display:none; }
+    #permission-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; }
+    #button_loader { background:#fff; color:#000; border:0; padding:12px 18px; border-radius:999px; font-weight:700; }
+    #loading-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.9);}
+    #loading_gif { width:72px; height:72px; border-radius:50%; border:3px solid #333; border-top-color:#fff; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg);} }
+    #discription { position: fixed; left: 0; right: 0; bottom: 84px; display:none; text-align:center; }
+    .intro { opacity:.8; font-size:14px; }
+    #frame { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px; text-align:center; }
+    .desktop_view { opacity:.8; }
+    #about { position:fixed; right:16px; top:16px; }
+    #aboutText { display:none; position:fixed; right:16px; top:60px; max-width:280px; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,0.08); backdrop-filter: blur(6px); }
+    .questionButton{ display:none; background:#111; color:#fff; border:1px solid #333; padding:8px 12px; border-radius:10px; }
+    #download_div { position:fixed; left:0; right:0; bottom:20px; display:flex; justify-content:center; }
+    .downloadButton { display:none; background:#fff; color:#000; border:0; padding:12px 18px; border-radius:999px; font-weight:700; }
+    video { position:fixed; left:-9999px; width:0; height:0; opacity:0; }
+    canvas { image-rendering: auto; }
+    a { color:#87CEFA; }
+  </style>
+</head>
+
+<body id="body_ID">
+  <!-- Loading overlay -->
+  <div id="loading-screen" class="wrapper"><div id="loading_gif"></div></div>
+
+  <!-- Permission gate -->
+  <section id="permission-screen">
+    <div id="loader">Please allow camera access to experience this website.<br>Your video will not be stored anywhere.</div>
+    <button id="button_loader">Continue</button>
+  </section>
+
+  <!-- Three.js mount point -->
+  <div id="container"></div>
+
+  <!-- Hidden working canvases and video -->
+  <canvas id="canvas04" width="300" height="300" style="display:none"></canvas>
+  <canvas id="canvas01" width="300" height="300" style="display:none"></canvas>
+  <canvas id="canvas02" width="300" height="150" style="display:none"></canvas>
+  <canvas id="Mycanvas" width="300" height="300" style="display:none"></canvas>
+  <video autoplay muted playsinline id="video" width="480" height="640"></video>
+
+  <!-- Helper copy -->
+  <div id="discription"><p class="intro">Click or drag to find your best angle</p></div>
+  <div id="frame"><p class="desktop_view">This website is optimized for phones.</p></div>
+
+  <!-- About -->
+  <div id="about">
+    <div id="aboutText">
+      <p class="explain">
+        <strong>Take a Selfie</strong> explores selfie creation with 3D rendering and face detection. Click & drag to find your angle.
+      </p>
+      <p class="credits">
+        Technologies: <a href="https://threejs.org/">Three.js</a> & <a href="https://learn.ml5js.org/#/reference/posenet">ml5js PoseNet</a>
+      </p>
+    </div>
+    <button class="questionButton" id="aboutButton">Info</button>
+  </div>
+
+  <!-- Capture button -->
+  <div id="download_div"><button class="downloadButton" id="download">Capture</button></div>
+
+<script>
+// ===== Config & globals =====
+var WIDTH = window.innerWidth;
+var HEIGHT = window.innerHeight;
+var VIEW_ANGLE = 35, ASPECT = WIDTH / HEIGHT, NEAR = 1, FAR = 2000;
+var camera, scene, renderer, controls;
+var material, material01, material02, material03;
+var cube01, cube02, cube03, cube04;
+let noseX=0, noseY=0, left_eyeX=0, left_eyeY=0, right_eyeX=0, right_eyeY=0, mouthX=0, mouthY=0;
+let poses = [];
+var disable_refresh_position = false;
+var clicked_about = false;
+let drag = false;
+var video = document.getElementById('video');
+var nose_canvas = document.getElementById('canvas04'); var ctx = nose_canvas.getContext('2d');
+var eye_canvas = document.getElementById('Mycanvas'); var ctx01 = eye_canvas.getContext('2d');
+var eye2_canvas = document.getElementById('canvas01'); var ctx02 = eye2_canvas.getContext('2d');
+var mouth_canvas = document.getElementById('canvas02'); var ctx03 = mouth_canvas.getContext('2d');
+
+function lerp(a,b,t){ t=Math.max(0,Math.min(1,t)); return a + (b-a)*t; }
+function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2,y1-y2); }
+function getRandomArbitrary(min,max){ return Math.random()*(max-min)+min; }
+
+// ===== UI wiring =====
+$('#download').on('click', function(){
+  if(!renderer) return;
+  var dataURL = renderer.domElement.toDataURL('image/png');
+  var link = document.createElement('a');
+  link.download = 'selfie.png';
+  link.href = dataURL; link.target = '_blank'; link.click();
+});
+
+$('#aboutButton').on('click', function(){
+  disable_refresh_position = !disable_refresh_position;
+  clicked_about = true;
+  $('#aboutText').fadeToggle('fast');
+  $('#aboutButton').text($('#aboutButton').text() === 'Info' ? 'Close' : 'Info');
+});
+
+$('#container, #discription').on('touchstart mousedown', function(){ $('#discription').fadeOut('fast'); });
+
+// Mobile gate like original (< 801px)
+if (window.innerWidth >= 801) {
+  document.getElementById('frame').style.display = 'flex';
+}
+
+// Camera permission flow
+let buttonclicked = false;
+$('#button_loader').on('click', async function(){
+  if (buttonclicked) return; buttonclicked = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    $('#loading-screen').css('display','flex');
+    video.srcObject = stream; await video.play();
+    setTimeout(function(){
+      $('#loading-screen').fadeOut('fast');
+      $('#discription, #aboutButton, #container, .downloadButton').fadeIn('slow');
+    }, 1200);
+    $('#permission-screen').fadeOut('slow');
+    startApp();
+  } catch(err){ console.error(err); alert('Camera access denied. Please enable camera permissions.'); buttonclicked = false; }
+});
+
+// ===== PoseNet callbacks =====
+function modelReady(){ console.log('PoseNet ready'); }
+function gotPoses(results){
+  poses = results;
+  if (!poses.length) return;
+  const kp = poses[0].pose.keypoints;
+  let nX = kp[0].position.x, nY = kp[0].position.y;
+  let leX = kp[1].position.x, leY = kp[1].position.y;
+  let reX = kp[2].position.x, reY = kp[2].position.y;
+  noseX = lerp(noseX, nX, 0.5); noseY = lerp(noseY, nY, 0.5);
+  left_eyeX = lerp(left_eyeX, leX, 0.5); left_eyeY = lerp(left_eyeY, leY, 0.5);
+  right_eyeX = lerp(right_eyeX, reX, 0.5); right_eyeY = lerp(right_eyeY, reY, 0.5);
+  let d = dist(noseX, noseY, left_eyeX, left_eyeY);
+  let mX = nX, mY = nY + d;
+  mouthX = lerp(mouthX, mX, 0.5); mouthY = lerp(mouthY, mY, 0.5);
+}
+
+// ===== Three.js scene =====
+function initThree(){
+  scene = new THREE.Scene();
+  const container = document.getElementById('container');
+  renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setSize(WIDTH, HEIGHT);
+  renderer.setClearColor('#000000');
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+  camera.position.set(0,0,281);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.minDistance = 600; controls.maxDistance = 600; controls.enablePan=false; controls.enableZoom=false; controls.enableRotate=true; controls.rotateSpeed=1.0;
+
+  document.addEventListener('pointerdown', () => drag=false);
+  document.addEventListener('pointermove', () => drag=true);
+  document.addEventListener('pointerup', onPointerUp);
+
+  scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
+
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8); hemiLight.position.set(100,500,0); scene.add(hemiLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.4); dirLight.position.set(-3000,4000,3000); dirLight.castShadow=true; scene.add(dirLight);
+
+  const nose_texture = new THREE.CanvasTexture(nose_canvas);
+  const eye_texture  = new THREE.CanvasTexture(eye_canvas);
+  const eye2_texture = new THREE.CanvasTexture(eye2_canvas);
+  const mouth_texture= new THREE.CanvasTexture(mouth_canvas);
+
+  const g0 = new THREE.BoxGeometry(50, 80, 50);
+  material = new THREE.MeshBasicMaterial({ map: nose_texture });
+  cube01 = new THREE.Mesh(g0, material); cube01.position.set(30,-130,0); cube01.rotation.y = getRandomArbitrary(0.1,0.5); scene.add(cube01);
+
+  const g1 = new THREE.BoxGeometry(50, 50, 50);
+  material01 = new THREE.MeshBasicMaterial({ map: eye_texture });
+  cube02 = new THREE.Mesh(g1, material01); cube02.position.set(-30,-30,0); cube02.rotation.y = getRandomArbitrary(0.1,0.5); scene.add(cube02);
+
+  const g2 = new THREE.BoxGeometry(50, 50, 50);
+  material02 = new THREE.MeshBasicMaterial({ map: eye2_texture });
+  cube03 = new THREE.Mesh(g2, material02); cube03.position.set(50,80,0); cube03.rotation.y = getRandomArbitrary(0.1,0.5); scene.add(cube03);
+
+  const g3 = new THREE.BoxGeometry(100, 45, 45);
+  material03 = new THREE.MeshBasicMaterial({ map: mouth_texture });
+  cube04 = new THREE.Mesh(g3, material03); cube04.position.set(-40,100,0); cube04.rotation.y = getRandomArbitrary(0.1,0.5); scene.add(cube04);
+
+  window.addEventListener('resize', onResize);
+}
+
+function onResize(){
+  WIDTH = window.innerWidth; HEIGHT = window.innerHeight;
+  camera.aspect = WIDTH/HEIGHT; camera.updateProjectionMatrix();
+  renderer.setSize(WIDTH, HEIGHT);
+}
+
+function onPointerUp(e){ if(!drag){ ChangePosition(); } }
+
+function ChangePosition(){
+  function apart(){
+    const d12 = dist(cube01.position.x, cube01.position.y, cube02.position.x, cube02.position.y);
+    const d23 = dist(cube02.position.x, cube02.position.y, cube03.position.x, cube03.position.y);
+    const d13 = dist(cube01.position.x, cube01.position.y, cube03.position.x, cube03.position.y);
+    const d34 = dist(cube03.position.x, cube03.position.y, cube04.position.x, cube04.position.y);
+    const d24 = dist(cube02.position.x, cube02.position.y, cube04.position.x, cube04.position.y);
+    const d14 = dist(cube01.position.x, cube01.position.y, cube04.position.x, cube04.position.y);
+    return d12>=100 && d23>=100 && d13>=100 && d34>=100 && d24>=100 && d14>=100;
+  }
+  let tries=0;
+  do{
+    cube01.rotation.y = getRandomArbitrary(0.1,0.5);
+    cube02.rotation.y = getRandomArbitrary(0.1,0.5);
+    cube03.rotation.y = getRandomArbitrary(0.1,0.5);
+    cube04.rotation.y = getRandomArbitrary(0.1,0.5);
+    cube01.position.set(getRandomArbitrary(-55,55), getRandomArbitrary(-140,140), 0);
+    cube02.position.set(getRandomArbitrary(-50,50), getRandomArbitrary(-150,150), 0);
+    cube03.position.set(getRandomArbitrary(-50,50), getRandomArbitrary(-150,150), 0);
+    cube04.position.set(getRandomArbitrary(-45,45), getRandomArbitrary(-155,155), 0);
+  } while(!apart() && ++tries<64);
+}
+
+// ===== Main loop =====
+function animate(){
+  requestAnimationFrame(animate);
+  // crop quads from the live video based on keypoints
+  const d = dist(noseX, noseY, left_eyeX, left_eyeY) || 120; // fallback to avoid NaN before first pose
+  ctx.drawImage(video, noseX - d/2,  noseY - d/2,  d+0.01, d+0.01,  0, 0, 300, 300);
+  ctx01.drawImage(video,left_eyeX - d/2,left_eyeY - d/2,d+0.01, d+0.01, 0, 0, 300, 300);
+  ctx02.drawImage(video,right_eyeX- d/2,right_eyeY- d/2,d+0.01, d+0.01, 0, 0, 300, 300);
+  ctx03.drawImage(video,mouthX  - d/2,mouthY  - d/2,d+0.01, d+0.01, 0, 0, 300, 150);
+
+  // refresh textures
+  if(material){ material.map.needsUpdate = true; }
+  if(material01){ material01.map.needsUpdate = true; }
+  if(material02){ material02.map.needsUpdate = true; }
+  if(material03){ material03.map.needsUpdate = true; }
+
+  if (camera && scene && renderer){
+    camera.lookAt(scene.position);
+    renderer.render(scene, camera);
+    if(controls) controls.update();
+  }
+}
+
+// ===== Bootstrap =====
+function startApp(){
+  // PoseNet init
+  const poseNet = ml5.poseNet(video, modelReady);
+  poseNet.on('pose', gotPoses);
+  // Three init + loop
+  initThree();
+  animate();
+}
+</script>
+</body>
+</html>
