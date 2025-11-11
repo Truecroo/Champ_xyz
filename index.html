@@ -1,286 +1,425 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
+  <title>Selfie Cubes</title>
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
-  <title>Selfie — 3D кубы из камеры</title>
 
-  <!-- jQuery (как в исходнике, для простых fade/handlers) -->
+  <!-- jQuery (нужно для существующих обработчиков) -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
-  <!-- Three.js (ЕДИНАЯ версия). OrbitControls подключим как модуль той же версии -->
-  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+  <!-- THREE.js (зафиксированная версия) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
 
-  <!-- TensorFlow.js + ml5 (НЕ подключаем старый posenet! ml5 сам работает с TFJS) -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
+  <!-- TFJS + MediaPipe FaceMesh + ml5 (FaceMesh) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+  <script src="https://unpkg.com/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
+  <!-- Вспомогательные (как в оригинале; p5/isMobile не критичны, но оставлю) -->
+  <script src="https://cdn.jsdelivr.net/npm/ismobilejs@1/dist/isMobile.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.min.js"></script>
+
+  <link rel="stylesheet" href="selfie.css" />
   <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background:#000; color:#fff; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Inter, Arial, sans-serif; }
-    #container { position: fixed; inset: 0; display: none; } /* появится после разрешения камеры */
-    header, footer { position: fixed; left:0; right:0; display:flex; gap:8px; justify-content:center; z-index: 10; }
-    header { top:0; padding:10px; pointer-events:none; }
-    footer { bottom:0; padding:12px; }
-    .btn { pointer-events:auto; appearance:none; border:1px solid #333; background:#101010; color:#fff; padding:10px 14px; border-radius:12px; font-weight:600; }
-    .btn.primary { background:#fff; color:#000; border-color:#fff; }
-    #status { position:fixed; left:0; right:0; bottom:64px; text-align:center; font-size:12px; opacity:.85; z-index:10; }
-    #overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.85); z-index:20; }
-    .card { background:#0f0f0f; border:1px solid #222; border-radius:16px; padding:18px; width:min(520px,90vw); text-align:center; }
-    .card h2 { margin:0 0 8px; font-size:18px; }
-    .note { font-size:12px; opacity:.8; }
-    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
-    video { position: fixed; left:-9999px; width:0; height:0; opacity:0; }
-    #mobileOnly { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:30; }
-    #mobileOnly.show { display:flex; }
+    /* Подстраховка, если нет внешнего CSS */
+    body { margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    #permission-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#000; z-index:10; }
+    #button_loader, .downloadButton, .questionButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
+    #container { position:fixed; inset:0; display:none; }
+    #about { position:fixed; right:12px; bottom:12px; }
+    #aboutText { display:none; position:fixed; right:12px; bottom:60px; width:240px; background:rgba(0,0,0,.7); padding:12px; border-radius:8px; }
+    #download_div { position:fixed; left:12px; bottom:12px; display:none; }
+    #discription { position:fixed; top:12px; left:12px; }
+    #frame { position:fixed; top:12px; right:12px; display:none; }
+    #loading-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:9; }
+    #loading_gif { width:120px; height:120px; opacity:.8; }
+    video { opacity:0; width:0; height:0; position:absolute; left:-9999px; }
+    canvas { image-rendering: auto; }
   </style>
 </head>
-<body>
 
-<header>
-  <button id="btnInfo" class="btn">Инфо</button>
-</header>
+<body id="body_ID">
 
-<div id="container" aria-label="3D полотно"></div>
-
-<div id="overlay" role="dialog" aria-modal="true">
-  <div class="card">
-    <h2>Разреши доступ к камере</h2>
-    <p>Мы собираем 3D-кубы из твоего видео (нос, глаза, рот). Всё работает локально в браузере — данные никуда не отправляются.</p>
-    <p class="note">Если открыт во встроенном браузере (Telegram/IG/VK) — нажми «Открыть в браузере» и открой в Safari/Chrome.</p>
-    <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
-      <button id="btnStart" class="btn primary">Разрешить камеру</button>
-    </div>
+  <div id="loading-screen" class="wrapper">
+    <img id="loading_gif" src="Loading_G.gif" alt="loading">
   </div>
-</div>
 
-<div id="mobileOnly"><div class="card"><h2>Открой на телефоне</h2><p>Этот опыт рассчитан на мобильный экран (&lt; 801px по ширине).</p></div></div>
+  <section id="permission-screen">
+    <div id="loader">
+      Please allow camera access to experience this website.<br>Your video will not be stored anywhere.
+    </div>
+    <button id="button_loader">Continue</button>
+  </section>
 
-<footer>
-  <button id="btnCapture" class="btn primary">Снимок</button>
-</footer>
+  <div id="container"></div>
 
-<p id="status" aria-live="polite"></p>
+  <!-- Канвасы-источники для текстур (увеличены для четкости на ретине) -->
+  <canvas id="canvas04" width="512" height="512" style="display:none"></canvas>  <!-- nose -->
+  <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- right eye -->
+  <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- mouth -->
+  <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- left eye -->
 
-<!-- Скрытые поверхности для текстур -->
-<video id="video" autoplay playsinline muted></video>
-<canvas id="cNose"  width="300" height="300" class="sr-only"></canvas>
-<canvas id="cEyeL"  width="300" height="300" class="sr-only"></canvas>
-<canvas id="cEyeR"  width="300" height="300" class="sr-only"></canvas>
-<canvas id="cMouth" width="300" height="150" class="sr-only"></canvas>
+  <video autoplay muted playsinline id="video" width="480" height="640"></video>
+
+  <div id="discription">
+    <p class="intro">Tap to switch layout • Swipe to change plan</p>
+  </div>
+
+  <div id="frame">
+    <p class="desktop_view">This website is best on a phone.</p>
+  </div>
+
+  <div id="about">
+    <div id="aboutText">
+      <p class="explain">
+        Take a Selfie — 3D rendering + face detection. Click & drag to find your angle.
+      </p>
+      <p class="credits">
+        Technologies: <a href="https://threejs.org/">Three.js</a> & <a href="https://learn.ml5js.org/#/reference/facemesh">ml5 FaceMesh</a><br><br>
+        Rebuilt by Yegor’s dev 🤝
+      </p>
+    </div>
+    <button class="questionButton" id="aboutButton">Info</button>
+  </div>
+
+  <div id="download_div">
+    <button class="downloadButton" id="download">Capture</button>
+  </div>
 
 <script>
-/* ========= ХЕЛПЕРЫ ========= */
-const $ = sel => document.querySelector(sel);
-const on = (el,ev,cb)=> el.addEventListener(ev,cb);
-const log = (m)=> { $('#status').textContent = m; };
-const lerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
-const dist=(x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
+  // =======================
+  // Globals & DOM
+  // =======================
+  const video = document.getElementById("video");
 
-/* ========= СОСТОЯНИЕ ========= */
-let scene, camera, renderer, controls;
-let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
-let texNose, texEyeL, texEyeR, texMouth;
-let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
-let started=false;
-let drag=false; // для отличия свайпа от тапа (как в исходном коде)
-const video = $('#video');
+  const nose_canvas  = document.getElementById("canvas04"); const ctxNose  = nose_canvas.getContext("2d");
+  const left_canvas  = document.getElementById("Mycanvas"); const ctxLEye  = left_canvas.getContext("2d");
+  const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
+  const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
 
-const cNose = $('#cNose'), cEyeL = $('#cEyeL'), cEyeR = $('#cEyeR'), cMouth = $('#cMouth');
-const ctxN  = cNose.getContext('2d'), ctxL = cEyeL.getContext('2d'),
-      ctxR  = cEyeR.getContext('2d'), ctxM = cMouth.getContext('2d');
+  let scene, renderer, controls;
+  let camera, orthoCamera, activeCamera, isOrtho = false;
 
-/* ========= UI ========= */
-on($('#btnInfo'),'click',()=>alert('Тап — перемешать кубы. Свайп/drag — вращать сцену. Кнопка «Снимок» сохранит PNG. Все вычисления на устройстве.'));
+  let cube01, cube02, cube03, cube04; // nose, left eye, right eye, mouth
+  const FIXED_Z = 0;
 
-on($('#btnStart'),'click', async ()=>{
-  try{
-    if (innerWidth >= 801) { $('#mobileOnly').classList.add('show'); return; }
-    if (location.protocol!=='https:' && location.hostname!=='localhost'){
-      alert('Нужен HTTPS. Открой проект на https:// (Vercel) или локально.'); return;
+  // пресеты композиций (x, y) — можно дополнять
+  const presets = [
+    { nose:[  30,-130], lEye:[-30, -30], rEye:[ 50,  80], mouth:[-40, 100] },
+    { nose:[   0, -90], lEye:[-60, -40], rEye:[ 60, -40], mouth:[  0, 110] },
+    { nose:[ -20,-120], lEye:[-70,  10], rEye:[ 40,  40], mouth:[-10, 120] },
+  ];
+  let presetIndex = 0;
+
+  // bbox из FaceMesh (обновляются в gotFaces)
+  window._bbNose = null;
+  window._bbLEye = null;
+  window._bbREye = null;
+  window._bbMouth = null;
+
+  // жесты
+  let drag = false, touchStartX = 0, touchStartY = 0;
+
+  // =======================
+  // UI buttons
+  // =======================
+  $("#download").on("click", function(){
+    const dataURL = renderer.domElement.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = "selfie.png";
+    link.href = dataURL;
+    link.target = "_blank";
+    link.click();
+  });
+
+  $("#aboutButton").on("click", function(){
+    $("#aboutText").fadeToggle('fast');
+    $("#aboutButton").text(($("#aboutButton").text() === 'Info') ? 'Close' : 'Info').fadeIn();
+  });
+
+  $("#container").on('touchstart mousedown', function(){
+    $("#discription").fadeOut('fast');
+  });
+  $("#discription").on('touchstart mousedown', function(){
+    $("#discription").fadeOut('fast');
+  });
+
+  // =======================
+  // Camera permission & FaceMesh start
+  // =======================
+  let faceMesh;
+  let firstPredictionCame = false;
+
+  $("#button_loader").on("click", async function(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Camera is not available in this browser.");
+      return;
     }
-    log('Запрашиваем камеру…');
-    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'user' } }, audio:false });
-    video.srcObject = stream;
+    $("#permission-screen").fadeOut('slow');
+    $("#loading-screen").show();
 
-    // Ждём метаданные и старт
-    if (video.readyState < 1) await new Promise(res => video.onloadedmetadata = res);
-    await video.play();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      video.srcObject = stream;
+      await video.play();
 
-    // КРИТИЧЕСКОЕ: фиксируем реальные размеры видео (чтобы кроп совпадал с координатами PoseNet)
-    await new Promise(r=>setTimeout(r,50)); // небольшой yield для iOS
-    video.width  = video.videoWidth  || 480;
-    video.height = video.videoHeight || 640;
+      // теперь, когда видео реально играет — стартуем FaceMesh
+      faceMesh = ml5.faceMesh(video, () => console.log("facemesh ready"));
+      faceMesh.on("predict", gotFaces);
 
-    $('#overlay').style.display='none';
-    $('#container').style.display='block';
-    log('Камера ок. Загружаем модель…');
+      // показать сцену/кнопки сразу (прятать лоадер — при первом predict)
+      $("#container").fadeIn('slow');
+      $("#download_div").fadeIn('slow');
+      $("#aboutButton").fadeIn('slow');
+    } catch (e) {
+      console.error(e);
+      alert("Camera permission was denied.");
+    }
+  });
 
-    boot();
-  }catch(err){
-    console.error(err);
-    alert(`Ошибка камеры: ${err.name} — ${err.message}`);
-    log('Доступ к камере отклонён. Разреши камеру в настройках браузера/сайта.');
+  // =======================
+  // Face landmarks → bboxes
+  // =======================
+  function gotFaces(results) {
+    if (!results || results.length === 0) return;
+
+    if (!firstPredictionCame) {
+      firstPredictionCame = true;
+      $("#loading-screen").fadeOut('fast');
+    }
+
+    const pts = results[0].scaledMesh; // 468 точек
+
+    // Наборы индексов контуров
+    const leftEyeIdx = [33, 133, 160, 159, 158, 157, 173];
+    const rightEyeIdx= [362, 263, 387, 386, 385, 384, 398];
+    const noseIdx    = [1, 6, 197, 195, 5, 4, 45];
+    const mouthIdx   = [78, 95, 88, 178, 87, 14, 317, 308, 324];
+
+    function bbox(idxs) {
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+      for (const i of idxs) {
+        const p = pts[i];
+        if (!p) continue;
+        const x = p[0], y = p[1];
+        if (x < minX) minX = x; if (y < minY) minY = y;
+        if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+      }
+      return { x:minX, y:minY, w:Math.max(1, maxX-minX), h:Math.max(1, maxY-minY) };
+    }
+    function pad(b, p=10){ return { x:b.x-p, y:b.y-p, w:b.w+2*p, h:b.h+2*p }; }
+
+    window._bbNose  = pad(bbox(noseIdx), 10);
+    window._bbLEye  = pad(bbox(leftEyeIdx), 10);
+    window._bbREye  = pad(bbox(rightEyeIdx), 10);
+    window._bbMouth = pad(bbox(mouthIdx), 12);
   }
-});
 
-on($('#btnCapture'),'click',()=>{
-  if(!renderer) return;
-  const a=document.createElement('a');
-  a.href = renderer.domElement.toDataURL('image/png');
-  a.download='selfie.png'; a.click();
-});
+  // =======================
+  // Three.js setup
+  // =======================
+  const WIDTH = window.innerWidth;
+  const HEIGHT = window.innerHeight;
+  const VIEW_ANGLE = 35, ASPECT = WIDTH/HEIGHT, NEAR = 0.1, FAR = 2000;
 
-/* ========= ТАП/СВАЙП КАК В ОРИГИНАЛЕ ========= */
-// pointerdown -> drag=false; pointermove -> drag=true; pointerup -> если !drag => перемешать
-on(document,'pointerdown',()=>{ drag=false; });
-on(document,'pointermove',()=>{ drag=true; });
-on(document,'pointerup',(e)=>{
-  // игнорим, если клик по кнопкам
-  const t = e.target;
-  if (t.closest('button')) return;
-  if (!drag) changePosition(); // «тап»
-});
+  initThree();
+  animate();
 
-/* ========= THREE ========= */
-function initThree(){
-  const WIDTH=innerWidth, HEIGHT=innerHeight;
-  scene = new THREE.Scene();
+  function initThree() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
 
-  renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
-  renderer.setPixelRatio(devicePixelRatio||1);
-  renderer.setSize(WIDTH,HEIGHT);
-  document.getElementById('container').appendChild(renderer.domElement);
-  renderer.setClearColor('#000000');
+    renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(WIDTH, HEIGHT);
+    renderer.setClearColor('#000000');
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
-  camera.position.set(0,0,281);
+    document.getElementById('container').appendChild(renderer.domElement);
 
-  // OrbitControls — модулем той же версии, что three
-  import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js')
-    .then(mod=>{
-      const OrbitControls = mod.OrbitControls;
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.minDistance = 600;
-      controls.maxDistance = 600;
-      controls.enablePan   = false;
-      controls.enableZoom  = false;
-      controls.enableRotate= true;
-      controls.rotateSpeed = 1.0;
+    // камеры: перспектива + орто
+    camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+    camera.position.set(0, 0, 281);
+
+    const frustumSize = 400;
+    orthoCamera = new THREE.OrthographicCamera(
+      -frustumSize*ASPECT/2, frustumSize*ASPECT/2,
+       frustumSize/2, -frustumSize/2,
+       NEAR, FAR
+    );
+    orthoCamera.position.set(0,0,281);
+
+    activeCamera = camera;
+
+    controls = new THREE.OrbitControls(activeCamera, renderer.domElement);
+    controls.enablePan = false;
+    controls.enableZoom = false;
+    controls.enableRotate = false; // управление планом делаем только жестами
+
+    // свет
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.8);
+    hemi.position.set(100, 500, 0);
+    scene.add(hemi);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 0.4);
+    dir.position.set(-3000, 4000, 3000);
+    dir.castShadow = true;
+    scene.add(dir);
+
+    // текстуры с канвасов
+    const texNose  = new THREE.CanvasTexture(nose_canvas);
+    const texLEye  = new THREE.CanvasTexture(left_canvas);
+    const texREye  = new THREE.CanvasTexture(right_canvas);
+    const texMouth = new THREE.CanvasTexture(mouth_canvas);
+
+    const matNose  = new THREE.MeshBasicMaterial({ map: texNose  });
+    const matLEye  = new THREE.MeshBasicMaterial({ map: texLEye  });
+    const matREye  = new THREE.MeshBasicMaterial({ map: texREye  });
+    const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
+
+    // геометрии кубов
+    const gNose  = new THREE.BoxGeometry(50, 80, 50);
+    const gEye   = new THREE.BoxGeometry(50, 50, 50);
+    const gMouth = new THREE.BoxGeometry(100, 45, 45);
+
+    cube01 = new THREE.Mesh(gNose,  matNose);  // nose
+    cube02 = new THREE.Mesh(gEye,   matLEye);  // left eye
+    cube03 = new THREE.Mesh(gEye,   matREye);  // right eye
+    cube04 = new THREE.Mesh(gMouth, matMouth); // mouth
+
+    // Без поворотов, единая глубина
+    [cube01, cube02, cube03, cube04].forEach(c => {
+      c.rotation.set(0,0,0);
+      c.position.z = FIXED_Z;
+      scene.add(c);
     });
 
-  // Свет (как в исходнике, упрощённо)
-  scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
-  const dir = new THREE.DirectionalLight(0xffffff,0.4); dir.position.set(-3000,4000,3000); scene.add(dir);
-  scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
+    applyPreset(presetIndex);
 
-  // Текстуры с Canvas
-  texNose  = new THREE.CanvasTexture(cNose);
-  texEyeL  = new THREE.CanvasTexture(cEyeL);
-  texEyeR  = new THREE.CanvasTexture(cEyeR);
-  texMouth = new THREE.CanvasTexture(cMouth);
-
-  // Геометрия кубов
-  cubeNose  = new THREE.Mesh(new THREE.BoxGeometry(50,80,50),  new THREE.MeshBasicMaterial({ map: texNose  }));
-  cubeEyeL  = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeL  }));
-  cubeEyeR  = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeR  }));
-  cubeMouth = new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
-
-  scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
-
-  // Начальные позиции/повороты как в исходнике (рандом в допустимых пределах)
-  changePosition();
-
-  // Resize
-  on(window,'resize', ()=>{
-    const W=innerWidth, H=innerHeight;
-    renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
-  });
-}
-
-/* ========= РАНДОМИЗАЦИЯ КУБОВ (как в исходнике) ========= */
-function rand(a,b){ return Math.random()*(b-a)+a; }
-
-function changePosition(){
-  let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
-  do {
-    cubeNose.rotation.y  = rand(0.1,0.5);
-    cubeEyeL.rotation.y  = rand(0.1,0.5);
-    cubeEyeR.rotation.y  = rand(0.1,0.5);
-    cubeMouth.rotation.y = rand(0.1,0.5);
-
-    cubeNose.position.set( rand(-55,55),  rand(-140,140), 0 );
-    cubeEyeL.position.set( rand(-50,50),  rand(-150,150), 0 );
-    cubeEyeR.position.set( rand(-50,50),  rand(-150,150), 0 );
-    cubeMouth.position.set(rand(-45,45),  rand(-155,155), 0 );
-
-    const p01=cubeNose.position, p02=cubeEyeL.position, p03=cubeEyeR.position, p04=cubeMouth.position;
-    const f=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
-    d1=f(p01,p02); d2=f(p02,p03); d3=f(p01,p03); d4=f(p03,p04); d5=f(p02,p04); d6=f(p01,p04);
-  } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
-}
-
-/* ========= POSENET (через ml5) ========= */
-function startPoseNet(){
-  const net = ml5.poseNet(video, ()=> log('Модель готова'));
-  net.on('pose',(results)=>{
-    if(!results.length) return;
-    const k = results[0].pose.keypoints;
-    const nX = k[0].position.x, nY = k[0].position.y; // нос
-    const Lx = k[1].position.x, Ly = k[1].position.y; // левый глаз
-    const Rx = k[2].position.x, Ry = k[2].position.y; // правый глаз
-    noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
-    leX   = lerp(leX,Lx,.5);  leY   = lerp(leY,Ly,.5);
-    reX   = lerp(reX,Rx,.5);  reY   = lerp(reY,Ry,.5);
-    const d = dist(noseX,noseY,leX,leY);
-    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);     // рот ≈ нос + d вниз (как в оригинале)
-  });
-}
-
-/* ========= РЕНДЕР-ЦИКЛ ========= */
-function loop(){
-  requestAnimationFrame(loop);
-
-  const d  = dist(noseX,noseY,leX,leY) || 120;
-  const vw = video.width  || video.videoWidth  || 480;
-  const vh = video.height || video.videoHeight || 640;
-
-  // безопасный кроп (не выходим за края кадра)
-  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const safe=(sx,sy,sw,sh)=>{
-    const x=clamp(sx,0,vw-1), y=clamp(sy,0,vh-1);
-    const w=clamp(sw,1,vw-x), h=clamp(sh,1,vh-y);
-    return {x,y,w,h};
-  };
-
-  try{
-    let r;
-    r=safe(noseX-d/2, noseY-d/2, d+0.01, d+0.01); ctxN.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
-    r=safe(leX  -d/2, leY  -d/2, d+0.01, d+0.01); ctxL.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
-    r=safe(reX  -d/2, reY  -d/2, d+0.01, d+0.01); ctxR.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,300);
-    r=safe(mX   -d/2, mY   -d/2, d+0.01, d+0.01); ctxM.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,150);
-  }catch(e){ /* ждём первый апдейт позы */ }
-
-  if (texNose)  texNose.needsUpdate  = true;
-  if (texEyeL)  texEyeL.needsUpdate  = true;
-  if (texEyeR)  texEyeR.needsUpdate  = true;
-  if (texMouth) texMouth.needsUpdate = true;
-
-  if (renderer && camera && scene){
-    camera.lookAt(scene.position);
-    renderer.render(scene,camera);
-    if (controls) controls.update();
+    window.addEventListener('resize', onResize);
   }
-}
 
-/* ========= ЗАПУСК ========= */
-function boot(){
-  if(started) return; started = true;
-  initThree();
-  startPoseNet();
-  loop();
-}
+  function applyPreset(i) {
+    const p = presets[i];
+    cube01.position.set(p.nose[0],  p.nose[1],  FIXED_Z);
+    cube02.position.set(p.lEye[0],  p.lEye[1],  FIXED_Z);
+    cube03.position.set(p.rEye[0],  p.rEye[1],  FIXED_Z);
+    cube04.position.set(p.mouth[0], p.mouth[1], FIXED_Z);
+
+    [cube01, cube02, cube03, cube04].forEach(c => c.rotation.set(0,0,0));
+  }
+
+  function onResize() {
+    const w = window.innerWidth, h = window.innerHeight, aspect = w/h;
+
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+
+    const frustumSize = 400;
+    orthoCamera.left = -frustumSize*aspect/2;
+    orthoCamera.right = frustumSize*aspect/2;
+    orthoCamera.top = frustumSize/2;
+    orthoCamera.bottom = -frustumSize/2;
+    orthoCamera.updateProjectionMatrix();
+
+    renderer.setSize(w, h);
+  }
+
+  // =======================
+  // Drawing from video → canvases
+  // =======================
+  function safeDraw(dstCtx, b, dw, dh) {
+    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) return;
+    // гарантируем положительную ширину/высоту
+    const sx = Math.max(0, b.x);
+    const sy = Math.max(0, b.y);
+    const sw = Math.max(1, b.w);
+    const sh = Math.max(1, b.h);
+    try {
+      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+    } catch(e) {
+      // бывает, когда размеры ещё не инициализированы
+    }
+  }
+
+  // =======================
+  // Gestures: tap vs swipe
+  // =======================
+  document.addEventListener('pointerdown', () => { drag = false; }, {passive:true});
+  document.addEventListener('pointermove',  () => { drag = true;  }, {passive:true});
+  document.addEventListener('pointerup',    (e) => {
+    if (!drag) onTap(e);
+  }, {passive:true});
+
+  document.addEventListener('touchstart', (e) => {
+    drag = false;
+    const t = e.touches[0];
+    touchStartX = t.clientX; touchStartY = t.clientY;
+  }, {passive:true});
+
+  document.addEventListener('touchmove', () => { drag = true; }, {passive:true});
+
+  document.addEventListener('touchend', (e) => {
+    if (!drag) { onTap(e.changedTouches ? e.changedTouches[0] : e); return; }
+    const dx = (e.changedTouches[0].clientX - touchStartX);
+    if (Math.abs(dx) > 40) togglePlan(dx);
+  }, {passive:true});
+
+  function onTap(e) {
+    // игнор кликов по кнопкам/кнопке Info
+    const downloadRect = document.getElementById("download_div").getBoundingClientRect();
+    const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
+    const x = e.pageX || e.clientX, y = e.pageY || e.clientY;
+
+    const inDownload = x >= downloadRect.left-5 && x <= downloadRect.right+5 &&
+                       y >= downloadRect.top-5     && y <= downloadRect.bottom+5;
+    const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
+                       y >= aboutRect.top-5      && y <= aboutRect.bottom+5;
+
+    if (inDownload || inAbout) return;
+
+    // Перелистываем пресет
+    presetIndex = (presetIndex + 1) % presets.length;
+    applyPreset(presetIndex);
+  }
+
+  function togglePlan(dx) {
+    isOrtho = !isOrtho;
+    activeCamera = isOrtho ? orthoCamera : camera;
+
+    // лёгкое ощущение смены плана
+    const dir = dx > 0 ? 1 : -1;
+    scene.rotation.y += dir * 0.15;
+  }
+
+  // =======================
+  // Main loop
+  // =======================
+  function animate() {
+    requestAnimationFrame(animate);
+
+    // обновляем картинки для текстур
+    safeDraw(ctxNose,  window._bbNose,  nose_canvas.width,  nose_canvas.height);
+    safeDraw(ctxLEye,  window._bbLEye,  left_canvas.width,  left_canvas.height);
+    safeDraw(ctxREye,  window._bbREye,  right_canvas.width, right_canvas.height);
+    safeDraw(ctxMouth, window._bbMouth, mouth_canvas.width, mouth_canvas.height);
+
+    // обновить материалы (каждый кадр — дёшево, т.к. CanvasTexture)
+    if (cube01 && cube01.material && cube01.material.map) cube01.material.map.needsUpdate = true;
+    if (cube02 && cube02.material && cube02.material.map) cube02.material.map.needsUpdate = true;
+    if (cube03 && cube03.material && cube03.material.map) cube03.material.map.needsUpdate = true;
+    if (cube04 && cube04.material && cube04.material.map) cube04.material.map.needsUpdate = true;
+
+    render();
+  }
+
+  function render() {
+    activeCamera.lookAt(scene.position);
+    renderer.render(scene, activeCamera);
+  }
 </script>
 </body>
 </html>
