@@ -7,10 +7,11 @@
 
   <!-- three.js -->
   <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
 
   <!-- TFJS + PoseNet + ml5 -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
-  <script src="https://unpkg.com/@tensorflow-models/posenet@2.2.2/dist/posenet.min.js"></script>
+  <!-- ml5@0.12.x ожидает tfjs 3.x: фиксируем совместимую версию -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <style>
@@ -68,7 +69,6 @@
   </main>
 
   <footer>
-    <button id="btnShuffle" class="btn">Перемешать</button>
     <button id="btnCapture" class="btn primary">Снимок</button>
   </footer>
 </div>
@@ -88,8 +88,13 @@ let video = $('#video'), stream=null;
 let scene, camera, renderer, controls;
 let texNose, texEyeL, texEyeR, texMouth;
 let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
+let draggableObjects=[];
 let noseX=0,noseY=0,leX=0,leY=0,reX=0,reY=0,mX=0,mY=0;
 let started=false;
+
+// drag helpers
+let raycaster, dragPlane, dragOffset, dragIntersect, dragNormal;
+let dragPointer, dragTarget=null;
 
 /* canvases */
 const cNose=$('#cNose'), cEyeL=$('#cEyeL'), cEyeR=$('#cEyeR'), cMouth=$('#cMouth');
@@ -108,10 +113,10 @@ on($('#btnStart'), 'click', async ()=>{
     stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'user' } }, audio:false });
     video.srcObject = stream; await video.play();
 
-    // ✅ важное: выставляем реальные размеры — PoseNet использует координаты видео
+    // размеры кадра = реальные размеры видео (iOS/Safari fix)
     await new Promise(r=>setTimeout(r,50));
-    const vw = video.videoWidth || 480, vh = video.videoHeight || 640;
-    video.width = vw; video.height = vh;
+    video.width  = video.videoWidth  || 480;
+    video.height = video.videoHeight || 640;
 
     $('#overlay').style.display='none';
     log('Камера ок. Загружаем PoseNet…');
@@ -128,15 +133,6 @@ on($('#btnCapture'), 'click', ()=>{
   a.href=renderer.domElement.toDataURL('image/png'); a.download='selfie.png'; a.click();
 });
 
-on($('#btnShuffle'), 'click', ()=> shuffleCubes());
-
-/* тап без перетаскивания = перемешать (как в оригинале) */
-let dragging=false;
-const containerEl = document.getElementById('container');
-containerEl.addEventListener('pointerdown', ()=> dragging=false);
-containerEl.addEventListener('pointermove', ()=> dragging=true);
-containerEl.addEventListener('pointerup', ()=>{ if(!dragging) shuffleCubes(); });
-
 /* ===== three.js ===== */
 function initThree(){
   const WIDTH=innerWidth, HEIGHT=innerHeight;
@@ -148,13 +144,37 @@ function initThree(){
   camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
   camera.position.set(0,0,281);
 
-  import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js')
-    .then(mod=>{
-      const OrbitControls = mod.OrbitControls;
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enablePan=false; controls.enableZoom=false; controls.rotateSpeed=1.0;
-      controls.minDistance=600; controls.maxDistance=600;
-    });
+  const OrbitControlsCtor = (THREE && THREE.OrbitControls) || window.OrbitControls;
+  if (!OrbitControlsCtor) {
+    console.warn('OrbitControls script не подгружен. Камера останется статичной.');
+    controls = null;
+  } else {
+    controls = new OrbitControlsCtor(camera, renderer.domElement);
+    controls.enablePan = false;
+    controls.enableZoom = false;
+    controls.rotateSpeed = 1.0;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 600;
+    controls.maxDistance = 600;
+    controls.target.set(0,0,0);
+    controls.update();
+  }
+
+  raycaster = new THREE.Raycaster();
+  dragPlane = new THREE.Plane();
+  dragOffset = new THREE.Vector3();
+  dragIntersect = new THREE.Vector3();
+  dragNormal = new THREE.Vector3();
+  dragPointer = new THREE.Vector2();
+
+  const dom = renderer.domElement;
+  dom.style.touchAction = 'none';
+  dom.addEventListener('pointerdown', onDragStart);
+  dom.addEventListener('pointermove', onDragMove);
+  dom.addEventListener('pointerup', onDragEnd);
+  dom.addEventListener('pointercancel', onDragEnd);
+  dom.addEventListener('pointerleave', onDragEnd);
 
   scene.fog = new THREE.Fog(0xFFFFFF,1,25000);
   scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
@@ -170,7 +190,8 @@ function initThree(){
   cubeEyeR = new THREE.Mesh(new THREE.BoxGeometry(50,50,50),  new THREE.MeshBasicMaterial({ map: texEyeR  }));
   cubeMouth= new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
 
-  scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
+  draggableObjects = [cubeNose, cubeEyeL, cubeEyeR, cubeMouth];
+  scene.add(...draggableObjects);
   shuffleCubes();
 
   addEventListener('resize', ()=>{
@@ -180,16 +201,63 @@ function initThree(){
 }
 
 function shuffleCubes(){
-  const rnd=(a,b)=>Math.random()*(b-a)+a;
-  cubeNose.position.set(rnd(-55,55),  rnd(-140,140), 0); cubeNose.rotation.y = rnd(0.1,0.5);
-  cubeEyeL.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeL.rotation.y = rnd(0.1,0.5);
-  cubeEyeR.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeR.rotation.y = rnd(0.1,0.5);
-  cubeMouth.position.set(rnd(-45,45), rnd(-155,155), 0); cubeMouth.rotation.y = rnd(0.1,0.5);
+  // фикс: одинаковое расположение, без поворотов
+  cubeNose.position.set( 30, -130, 0); cubeNose.rotation.set(0,0,0);
+  cubeEyeL.position.set(-30,  -30, 0); cubeEyeL.rotation.set(0,0,0);
+  cubeEyeR.position.set( 50,   80, 0); cubeEyeR.rotation.set(0,0,0);
+  cubeMouth.position.set(-40,  100, 0); cubeMouth.rotation.set(0,0,0);
+}
+
+function pointerToNDC(ev){
+  const rect = renderer.domElement.getBoundingClientRect();
+  dragPointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  dragPointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function onDragStart(ev){
+  if(!renderer || !camera || !draggableObjects.length) return;
+  pointerToNDC(ev);
+  raycaster.setFromCamera(dragPointer, camera);
+  const hits = raycaster.intersectObjects(draggableObjects);
+  if(!hits.length) return;
+
+  dragTarget = hits[0].object;
+  dragTarget.userData.baseZ = dragTarget.position.z;
+  camera.getWorldDirection(dragNormal).negate();
+  dragPlane.setFromNormalAndCoplanarPoint(dragNormal, dragTarget.position);
+  if(raycaster.ray.intersectPlane(dragPlane, dragIntersect)){
+    dragOffset.copy(dragIntersect).sub(dragTarget.position);
+  }else{
+    dragOffset.set(0,0,0);
+  }
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+  ev.preventDefault();
+}
+
+function onDragMove(ev){
+  if(!dragTarget) return;
+  pointerToNDC(ev);
+  raycaster.setFromCamera(dragPointer, camera);
+  if(raycaster.ray.intersectPlane(dragPlane, dragIntersect)){
+    dragTarget.position.set(
+      dragIntersect.x - dragOffset.x,
+      dragIntersect.y - dragOffset.y,
+      dragTarget.userData.baseZ ?? 0
+    );
+  }
+  ev.preventDefault();
+}
+
+function onDragEnd(ev){
+  if(dragTarget && ev.currentTarget.hasPointerCapture?.(ev.pointerId)){
+    ev.currentTarget.releasePointerCapture(ev.pointerId);
+  }
+  dragTarget = null;
 }
 
 /* ===== PoseNet ===== */
 function startPoseNet(){
-  const net = ml5.poseNet(video, ()=> log('PoseNet готов'));
+  const net = ml5.poseNet(video, { flipHorizontal: true }, ()=> log('PoseNet готов'));
   net.on('pose', (res)=>{
     if(!res.length) return;
     const k = res[0].pose.keypoints;
@@ -209,10 +277,10 @@ function loop(){
   requestAnimationFrame(loop);
 
   const d = dist(noseX,noseY,leX,leY) || 120;
+  const vw = video.width  || video.videoWidth  || 480;
+  const vh = video.height || video.videoHeight || 640;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const vw=video.width||video.videoWidth||480, vh=video.height||video.videoHeight||640;
-
-  const safe = (sx,sy,sw,sh)=>{
+  const safe=(sx,sy,sw,sh)=>{
     const x=clamp(sx,0,vw-1), y=clamp(sy,0,vh-1);
     const w=clamp(sw,1,vw-x), h=clamp(sh,1,vh-y);
     return {x,y,w,h};
@@ -226,18 +294,16 @@ function loop(){
     r=safe(mX   -d/2, mY   -d/2, d+0.01, d+0.01); ctxM.drawImage(video,r.x,r.y,r.w,r.h, 0,0,300,150);
   }catch(e){ /* ждём первый апдейт позы */ }
 
-  // лёгкая авто-ротация — «кубы крутятся»
-  if(cubeNose)  cubeNose.rotation.y  += 0.003;
-  if(cubeEyeL)  cubeEyeL.rotation.y  += 0.0035;
-  if(cubeEyeR)  cubeEyeR.rotation.y  += 0.0025;
-  if(cubeMouth) cubeMouth.rotation.y += 0.0028;
-
   if(texNose)  texNose.needsUpdate = true;
   if(texEyeL)  texEyeL.needsUpdate = true;
   if(texEyeR)  texEyeR.needsUpdate = true;
   if(texMouth) texMouth.needsUpdate = true;
 
-  if(renderer && camera && scene){ camera.lookAt(scene.position); renderer.render(scene,camera); controls && controls.update(); }
+  if (renderer && camera && scene){
+    camera.lookAt(scene.position);
+    renderer.render(scene,camera);
+    if (controls) controls.update();
+  }
 }
 
 /* ===== boot ===== */
