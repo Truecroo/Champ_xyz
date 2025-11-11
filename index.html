@@ -8,11 +8,11 @@
   <!-- jQuery -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
-  <!-- THREE.js (r128) + OrbitControls этой же версии -->
+  <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+  <!-- ВНИМАНИЕ: OrbitControls убрали, чтобы не было ошибки конструктора -->
 
-  <!-- TFJS + MediaPipe FaceMesh + ml5 (ml5 внутри умеет и FaceMesh, и PoseNet) -->
+  <!-- TFJS + MediaPipe FaceMesh + ml5 -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/@mediapipe/face_mesh@0.4/face_mesh.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
@@ -101,12 +101,11 @@
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 
   // ===== Three.js =====
-  let scene, renderer, controls;
+  let scene, renderer;
   let camera, orthoCamera, activeCamera, isOrtho = false;
   let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
-  // Пресеты аккуратных позиций
   const presets = [
     { nose:[   0,  -60], lEye:[ -70, -20], rEye:[  70, -20], mouth:[   0,  70] },
     { nose:[ -30,  -80], lEye:[ -90,  10], rEye:[  40,  30], mouth:[ -10,  90] },
@@ -114,11 +113,9 @@
   ];
   let presetIndex = 0;
 
-  // ===== Лендмарки/боксы от моделей =====
+  // ===== Лендмарки/боксы =====
   let firstPredictionCame = false;
-  // FaceMesh bbox
   window._bbNose = null; window._bbLEye = null; window._bbREye = null; window._bbMouth = null;
-  // PoseNet точки (как в твоём коде)
   let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 
   // ===== UI =====
@@ -175,13 +172,13 @@
 
   // ===== Инициализация моделей =====
   function bootML(){
-    // FaceMesh (первый приоритет)
+    // FaceMesh
     try {
       const fm = ml5.faceMesh(video, () => console.log('FaceMesh готов'));
       fm.on('predict', gotFaces);
     } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
-    // PoseNet — бэкап и/или дополнительный источник
+    // PoseNet — бэкап
     try {
       const net = ml5.poseNet(video, () => console.log('PoseNet готов'));
       net.on('pose', gotPoses);
@@ -212,7 +209,7 @@
     window._bbMouth = pad(bbox(mouthIdx), 12);
   }
 
-  // PoseNet → точки (fallback). Если FaceMesh не даёт боксы — нарезаем по этой схеме.
+  // PoseNet → fallback боксы
   function gotPoses(res){
     if (!res || !res.length) return;
     const k = res[0].pose.keypoints;
@@ -220,7 +217,6 @@
     const Lx = k[1].position.x, Ly = k[1].position.y;
     const Rx = k[2].position.x, Ry = k[2].position.y;
 
-    // сглаживаем
     const lerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
     noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
     leX   = lerp(leX  ,Lx,.5); leY   = lerp(leY  ,Ly,.5);
@@ -229,7 +225,6 @@
     const d = Math.hypot(noseX-leX, noseY-leY) || 120;
     mX = lerp(mX,noseX,.5); mY = lerp(mY,noseY + d,.5);
 
-    // пересчитываем «псевдо-боксы» из PoseNet
     const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
     const sz = Math.max(40, Math.min(300, d));
     window._bbNose  = makeBox(noseX, noseY, sz);
@@ -238,7 +233,7 @@
     window._bbMouth = { x:mX - sz/2, y:mY - sz/2, w:sz, h:sz*0.5 };
   }
 
-  // ===== Three setup =====
+  // ===== Three setup (без OrbitControls) =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -261,9 +256,6 @@
     orthoCamera.position.set(0,0,300);
     activeCamera = camera;
 
-    controls = new THREE.OrbitControls(activeCamera, renderer.domElement);
-    controls.enablePan = false; controls.enableZoom = false; controls.enableRotate = false;
-
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dir = new THREE.DirectionalLight(0xffffff, 0.6); dir.position.set(300, 400, 500); scene.add(dir);
 
@@ -282,7 +274,7 @@
 
     window.addEventListener('resize', onResize);
 
-    // Жесты: тап/свайп (смена пресета/плана)
+    // Жесты: тап/свайп
     let drag=false, startX=0;
     document.addEventListener('pointerdown', e=>{ drag=false; startX=e.clientX; }, {passive:true});
     document.addEventListener('pointermove', ()=>{ drag=true; }, {passive:true});
@@ -354,7 +346,6 @@
   function animate(){
     requestAnimationFrame(animate);
 
-    // Если есть хоть какие-то боксы (от FaceMesh или PoseNet) — режем; иначе весь кадр
     const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
     if (hasLM) {
       drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
@@ -368,7 +359,6 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // Обновляем текстуры
     if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
     if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
     if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
