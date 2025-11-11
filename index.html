@@ -21,9 +21,9 @@
   <style>
     body { margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     #permission-screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#000; z-index:10; padding:24px; text-align:center; }
-    #button_loader, .downloadButton, .questionButton, .modeButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
+    #button_loader, .downloadButton, .questionButton { padding:10px 16px; border:1px solid #fff; background:transparent; color:#fff; border-radius:8px; }
     #container { position:fixed; inset:0; display:none; }
-    #about { position:fixed; right:12px; bottom:12px; display:flex; gap:8px; align-items:center; }
+    #about { position:fixed; right:12px; bottom:12px; }
     #aboutText { display:none; position:fixed; right:12px; bottom:60px; width:260px; background:rgba(0,0,0,.7); padding:12px; border-radius:8px; }
     #download_div { position:fixed; left:12px; bottom:12px; display:none; }
     #discription { position:fixed; top:12px; left:12px; background:rgba(0,0,0,.35); padding:8px 10px; border-radius:8px; }
@@ -32,7 +32,6 @@
     video { opacity:0; width:0; height:0; position:absolute; left:-9999px; }
     canvas { image-rendering:auto; }
     a { color:#9ad1ff; }
-    .pill { font-size:12px; opacity:.85; border:1px solid #444; padding:6px 10px; border-radius:999px; }
   </style>
 </head>
 
@@ -65,18 +64,16 @@
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">тап — <span id="hintAction">листать пресеты</span> • свайп — менять план</div>
+  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
 
   <div id="about">
-    <button class="modeButton" id="modeToggle">Режим: Пресеты</button>
-    <span class="pill" id="modeHint">тап = листать пресеты</span>
-    <button class="questionButton" id="aboutButton">Инфо</button>
     <div id="aboutText">
       <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
         Технологии: <a href="https://threejs.org/">Three.js</a>, <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>, <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
       </p>
     </div>
+    <button class="questionButton" id="aboutButton">Инфо</button>
   </div>
 
   <div id="download_div">
@@ -100,19 +97,17 @@
 
   // ===== Three.js =====
   let scene, renderer;
-  let camera, orthoCamera, activeCamera, isOrtho = false;
+  let camera, orthoCamera, activeCamera, isOrtho = false; // оставил возможность переключить проекцию кодом, но жест не используем
   let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
-  const presets = [
-    { nose:[   0,  -60], lEye:[ -70, -20], rEye:[  70, -20], mouth:[   0,  70] },
-    { nose:[ -30,  -80], lEye:[ -90,  10], rEye:[  40,  30], mouth:[ -10,  90] },
-    { nose:[  25,  -90], lEye:[ -50, -10], rEye:[  60,  40], mouth:[ -20, 100] }
-  ];
-  let presetIndex = 0;
-
-  // Режим перемещения: false = пресеты, true = рандом
-  let randomMode = false;
+  // «свои» орбит-контролы
+  let radius = 300;             // постоянная дистанция
+  let azimuth = 0;              // горизонтальный угол (рад)
+  let polar = Math.PI/2;        // вертикальный (рад)
+  const polarMin = Math.PI/6;   // ограничения, чтобы не «перевернуть» камеру
+  const polarMax = Math.PI*5/6;
+  let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
 
   // ===== Лендмарки/боксы =====
   let firstPredictionCame = false;
@@ -130,13 +125,6 @@
     $("#aboutButton").text(($("#aboutButton").text() === 'Инфо') ? 'Закрыть' : 'Инфо').fadeIn();
   });
   $("#container, #discription").on('touchstart mousedown', function(){ $("#discription").fadeOut('fast'); });
-
-  $("#modeToggle").on("click", ()=>{
-    randomMode = !randomMode;
-    $("#modeToggle").text(`Режим: ${randomMode ? 'Рандом' : 'Пресеты'}`);
-    $("#modeHint").text(randomMode ? 'тап = перемешать кубы' : 'тап = листать пресеты');
-    $("#hintAction").text(randomMode ? 'перемешивать' : 'листать пресеты');
-  });
 
   // ===== Камера + ошибки =====
   async function askCamera() {
@@ -182,6 +170,7 @@
 
     initThree();
     bootTrackers();   // FaceMesh + PoseNet
+    changePosition(); // показать кубы сразу в кадре
     animate();
   });
 
@@ -279,7 +268,7 @@
     }
   }
 
-  // ===== Three setup (без OrbitControls) =====
+  // ===== Three setup (без OrbitControls, свой «орбит» перетаскиванием) =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -291,7 +280,10 @@
 
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(35, aspect, 0.1, 2000);
-    camera.position.set(0,0,300);
+
+    // стартовая позиция камеры из сферических координат
+    updateCameraFromSpherical();
+    camera.lookAt(0,0,0);
 
     const frustumSize = 400;
     orthoCamera = new THREE.OrthographicCamera(
@@ -316,33 +308,52 @@
     cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55),  new THREE.MeshBasicMaterial({ map: texMouth }));
 
     [cube01, cube02, cube03, cube04].forEach(c=>{ c.rotation.set(0,0,0); c.position.z = FIXED_Z; scene.add(c); });
-    applyPreset(presetIndex);
 
     window.addEventListener('resize', onResize);
 
-    // Жесты: тап/свайп
-    let drag=false, startX=0;
-    document.addEventListener('pointerdown', e=>{ drag=false; startX=e.clientX; }, {passive:true});
-    document.addEventListener('pointermove', ()=>{ drag=true; }, {passive:true});
+    // Жесты: «орбит» перетаскиванием + распознаём короткий тап (перемешать)
+    document.addEventListener('pointerdown', e=>{
+      dragging=true; moved=false; dragStartTime=Date.now();
+      lastX=e.clientX; lastY=e.clientY;
+    }, {passive:true});
+
+    document.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      if (Math.abs(dx)>2 || Math.abs(dy)>2) moved=true;
+
+      const ROT_SPEED = 0.005; // чем больше — тем быстрее вращение
+      azimuth += dx * ROT_SPEED;
+      polar   -= dy * ROT_SPEED;
+      polar = Math.max(polarMin, Math.min(polarMax, polar));
+
+      lastX = e.clientX; lastY = e.clientY;
+      updateCameraFromSpherical();
+    }, {passive:true});
+
     document.addEventListener('pointerup', e=>{
-      if(!drag){ onTap(e); return; }
-      const dx = e.clientX - startX; if (Math.abs(dx)>40) togglePlan(dx);
+      if(!dragging) return;
+      const tap = !moved && (Date.now()-dragStartTime < 250);
+      dragging=false;
+      if (tap) onTap(e); // короткое касание = перемешать
     }, {passive:true});
   }
 
-  function applyPreset(i){
-    const p = presets[i];
-    cube01.position.set(p.nose[0],  p.nose[1],  FIXED_Z);
-    cube02.position.set(p.lEye[0],  p.lEye[1],  FIXED_Z);
-    cube03.position.set(p.rEye[0],  p.rEye[1],  FIXED_Z);
-    cube04.position.set(p.mouth[0], p.mouth[1], FIXED_Z);
-    [cube01, cube02, cube03, cube04].forEach(c=>c.rotation.set(0,0,0));
+  function updateCameraFromSpherical(){
+    // сферические → декартовы
+    const sinP = Math.sin(polar), cosP = Math.cos(polar);
+    const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
+    const x = radius * sinP * cosA;
+    const y = radius * cosP;
+    const z = radius * sinP * sinA;
+    camera.position.set(x,y,z);
+    camera.lookAt(0,0,0);
   }
 
-  // Рандом как в оригинале: повороты + координаты, пока все попарные расстояния >=100
+  // Рандом как в оригинале: повороты + координаты, пока попарные расстояния >=100
   function changePosition(){
     let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
-    const p01=cube01.position, p02=cube02.position, p03=cube03.position, p04=cube04.position;
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
     do{
       cube01.rotation.y  = rand(0.1,0.5);
@@ -376,8 +387,10 @@
     orthoCamera.updateProjectionMatrix();
 
     renderer.setSize(w,h);
+    updateCameraFromSpherical();
   }
 
+  // короткий тап — перемешать
   function onTap(e){
     const downloadRect = document.getElementById("download_div").getBoundingClientRect();
     const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
@@ -388,19 +401,7 @@
                        y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
     if (inDownload || inAbout) return;
 
-    if (randomMode) {
-      changePosition();
-    } else {
-      presetIndex = (presetIndex + 1) % presets.length;
-      applyPreset(presetIndex);
-    }
-  }
-
-  function togglePlan(dx){
-    isOrtho = !isOrtho;
-    activeCamera = isOrtho ? orthoCamera : camera;
-    const dir = dx > 0 ? 1 : -1;
-    scene.rotation.y += dir * 0.15;
+    changePosition();
   }
 
   // ===== Рендер/нарезка =====
@@ -440,7 +441,7 @@
     if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
     if (cube04?.material?.map) cube04.material.map.needsUpdate = true;
 
-    activeCamera.lookAt(scene.position);
+    activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
   }
 </script>
