@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Selfie Cubes — камера → 3D кубы</title>
 
-  <!-- Three.js -->
+  <!-- three.js -->
   <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
 
-  <!-- TensorFlow.js + PoseNet + ml5 -->
+  <!-- TFJS + PoseNet + ml5 -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/@tensorflow-models/posenet@2.2.2/dist/posenet.min.js"></script>
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
@@ -16,43 +16,43 @@
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: #000; color: #fff; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html, body { height: 100%; margin: 0; background:#000; color:#fff;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #app { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; }
-    header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #171717; backdrop-filter: blur(6px); background: rgba(0,0,0,.4); }
-    header h1 { font-size: 14px; margin: 0; opacity: .9; font-weight: 600; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px;
+      border-bottom:1px solid #171717; background:rgba(0,0,0,.4); backdrop-filter:blur(6px); }
+    header h1 { margin:0; font-size:14px; font-weight:600; opacity:.9; }
     main { position: relative; }
-    #container { position: absolute; inset: 0; }
-    footer { display: flex; gap: 8px; justify-content: center; align-items: center; padding: 16px; }
-    .btn { appearance: none; border: 1px solid #333; background: #0f0f0f; color: #fff; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer; }
-    .btn.primary { background: #fff; color: #000; border-color: #fff; }
-    #status { font-size: 12px; opacity: .8; text-align: center; padding: 6px 12px; }
-    #overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.85); }
-    #overlay.show { display: flex; }
-    .card { background: #0d0d0d; border: 1px solid #222; border-radius: 14px; padding: 16px; max-width: 520px; text-align: center; }
-    .card h2 { margin: 0 0 8px; font-size: 18px; }
-    .note { font-size: 12px; opacity: .8; }
-    video { position: fixed; left: -9999px; width: 0; height: 0; opacity: 0; }
-    canvas { image-rendering: auto; }
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+    #container { position:absolute; inset:0; }
+    footer { display:flex; gap:8px; justify-content:center; align-items:center; padding:16px; }
+    .btn { appearance:none; border:1px solid #333; background:#0f0f0f; color:#fff;
+      padding:10px 14px; border-radius:10px; font-weight:600; cursor:pointer; }
+    .btn.primary { background:#fff; color:#000; border-color:#fff; }
+    #status { font-size:12px; opacity:.85; text-align:center; padding:6px 12px; }
+    #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.85); }
+    .card { background:#0d0d0d; border:1px solid #222; border-radius:14px; padding:16px; max-width:520px; text-align:center; }
+    .card h2 { margin:0 0 8px; font-size:18px; }
+    .note { font-size:12px; opacity:.85; }
+    video { position: fixed; left:-9999px; width:0; height:0; opacity:0; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
   </style>
 </head>
 <body>
 <div id="app">
   <header>
     <h1>Selfie Cubes · PoseNet + Three.js</h1>
-    <div>
-      <button id="btnInfo" class="btn" title="Информация">Инфо</button>
-    </div>
+    <button id="btnInfo" class="btn" title="Информация">Инфо</button>
   </header>
 
   <main>
     <div id="container" aria-label="3D полотно"></div>
 
-    <div id="overlay" class="show" role="dialog" aria-modal="true">
+    <div id="overlay" role="dialog" aria-modal="true">
       <div class="card">
         <h2>Дай доступ к камере</h2>
-        <p>Мы собираем кубики из видео с твоей фронталки. Ничего никуда не отправляется — всё работает в браузере.</p>
-        <p class="note">Если открыл через встроенный браузер (Telegram/IG/VK) — нажми «Открыть в браузере» и открой в Safari/Chrome.</p>
+        <p>Мы собираем кубики из видео с фронталки. Ничего никуда не отправляется — всё локально в браузере.</p>
+        <p class="note">Если открыл через встроенный браузер (Telegram/IG/VK) — «Открыть в браузере», затем Safari/Chrome.</p>
         <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
           <button id="btnStart" class="btn primary">Разрешить камеру</button>
         </div>
@@ -61,9 +61,9 @@
 
     <!-- скрытые поверхности для текстур -->
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="cNose" width="300" height="300" class="sr-only"></canvas>
-    <canvas id="cEyeL" width="300" height="300" class="sr-only"></canvas>
-    <canvas id="cEyeR" width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cNose"  width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cEyeL"  width="300" height="300" class="sr-only"></canvas>
+    <canvas id="cEyeR"  width="300" height="300" class="sr-only"></canvas>
     <canvas id="cMouth" width="300" height="150" class="sr-only"></canvas>
   </main>
 
@@ -73,162 +73,4 @@
   </footer>
 </div>
 
-<p id="status" aria-live="polite"></p>
-
-<script>
-// ——— Хелперы ———
-const $ = (sel) => document.querySelector(sel);
-const on = (el, ev, cb) => el.addEventListener(ev, cb);
-const log = (msg) => { $('#status').textContent = msg; };
-const lerp = (a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
-const dist = (x1,y1,x2,y2)=>Math.hypot(x1-x2,y1-y2);
-
-// ——— Состояние ———
-let video = $('#video');
-let stream = null;
-let scene, camera, renderer, controls;
-let texNose, texEyeL, texEyeR, texMouth;
-let cubeNose, cubeEyeL, cubeEyeR, cubeMouth;
-let noseX=0,noseY=0,leX=0,leY=0,reX=0,reY=0,mX=0,mY=0;
-let started = false;
-
-// Canvas
-const cNose = $('#cNose'), cEyeL = $('#cEyeL'), cEyeR = $('#cEyeR'), cMouth = $('#cMouth');
-const ctxN = cNose.getContext('2d');
-const ctxL = cEyeL.getContext('2d');
-const ctxR = cEyeR.getContext('2d');
-const ctxM = cMouth.getContext('2d');
-
-// ——— UI ———
-on($('#btnInfo'), 'click', ()=> alert('Selfie Cubes: твоё лицо нарезается на квадраты (нос, глаза, рот) и мапится на 3D‑кубы. Все вычисления локально — данных на сервер нет.'));
-
-on($('#btnStart'), 'click', async ()=>{
-  try {
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-      alert('Нужен HTTPS. Открой через https:// или на Vercel/Netlify.');
-      return;
-    }
-    $('#overlay').classList.remove('show');
-    log('Запрашиваем камеру…');
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false });
-    video.srcObject = stream; await video.play();
-    log('Камера ок. Загружаем PoseNet…');
-    boot();
-  } catch (err) {
-    console.error(err);
-    alert(`Ошибка камеры: ${err.name} — ${err.message}`);
-    $('#overlay').classList.add('show');
-    log('Доступ к камере отклонён. Разреши камеру в настройках браузера/сайта.');
-  }
-});
-
-on($('#btnCapture'), 'click', ()=>{
-  if (!renderer) return;
-  const a = document.createElement('a');
-  a.href = renderer.domElement.toDataURL('image/png');
-  a.download = 'selfie.png'; a.click();
-});
-
-on($('#btnShuffle'), 'click', ()=> shuffleCubes());
-
-// ——— Инициализация 3D ———
-function initThree(){
-  const WIDTH = innerWidth, HEIGHT = innerHeight;
-  scene = new THREE.Scene();
-  renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
-  renderer.setPixelRatio(devicePixelRatio||1);
-  renderer.setSize(WIDTH, HEIGHT);
-  document.getElementById('container').appendChild(renderer.domElement);
-
-  camera = new THREE.PerspectiveCamera(35, WIDTH/HEIGHT, 1, 2000);
-  camera.position.set(0,0,281);
-
-  // Импорт OrbitControls как модуля (современный способ)
-  import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js')
-    .then(mod => {
-      const OrbitControls = mod.OrbitControls;
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enablePan = false;
-      controls.enableZoom = false;
-      controls.rotateSpeed = 1.0;
-      controls.minDistance = 600;
-      controls.maxDistance = 600;
-    })
-    .catch(e=>console.error('OrbitControls import error:', e));
-
-  scene.fog = new THREE.Fog(0xFFFFFF, 1, 25000);
-  scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,0.8));
-  const dir = new THREE.DirectionalLight(0xffffff,0.4); dir.position.set(-3000,4000,3000); scene.add(dir);
-
-  texNose  = new THREE.CanvasTexture(cNose);
-  texEyeL  = new THREE.CanvasTexture(cEyeL);
-  texEyeR  = new THREE.CanvasTexture(cEyeR);
-  texMouth = new THREE.CanvasTexture(cMouth);
-
-  cubeNose = new THREE.Mesh(new THREE.BoxGeometry(50,80,50), new THREE.MeshBasicMaterial({ map: texNose }));
-  cubeEyeL = new THREE.Mesh(new THREE.BoxGeometry(50,50,50), new THREE.MeshBasicMaterial({ map: texEyeL }));
-  cubeEyeR = new THREE.Mesh(new THREE.BoxGeometry(50,50,50), new THREE.MeshBasicMaterial({ map: texEyeR }));
-  cubeMouth= new THREE.Mesh(new THREE.BoxGeometry(100,45,45), new THREE.MeshBasicMaterial({ map: texMouth }));
-
-  scene.add(cubeNose, cubeEyeL, cubeEyeR, cubeMouth);
-  shuffleCubes();
-
-  addEventListener('resize', ()=>{
-    const W = innerWidth, H = innerHeight; renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
-  });
-}
-
-function shuffleCubes(){
-  const rnd = (a,b)=>Math.random()*(b-a)+a;
-  cubeNose.position.set(rnd(-55,55),  rnd(-140,140), 0); cubeNose.rotation.y = rnd(0.1,0.5);
-  cubeEyeL.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeL.rotation.y = rnd(0.1,0.5);
-  cubeEyeR.position.set(rnd(-50,50),  rnd(-150,150), 0); cubeEyeR.rotation.y = rnd(0.1,0.5);
-  cubeMouth.position.set(rnd(-45,45), rnd(-155,155), 0); cubeMouth.rotation.y = rnd(0.1,0.5);
-}
-
-// ——— PoseNet ———
-function startPoseNet(){
-  const net = ml5.poseNet(video, ()=> log('PoseNet готов'));
-  net.on('pose', (results)=>{
-    if (!results.length) return;
-    const k = results[0].pose.keypoints;
-    const nX = k[0].position.x, nY = k[0].position.y;
-    const Lx = k[1].position.x, Ly = k[1].position.y;
-    const Rx = k[2].position.x, Ry = k[2].position.y;
-    noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
-    leX = lerp(leX,Lx,.5);    leY = lerp(leY,Ly,.5);
-    reX = lerp(reX,Rx,.5);    reY = lerp(reY,Ry,.5);
-    const d = dist(noseX,noseY,leX,leY);
-    mX = lerp(mX,nX,.5); mY = lerp(mY,nY + d,.5);
-  });
-}
-
-// ——— Рендер-цикл ———
-function loop(){
-  requestAnimationFrame(loop);
-  const d = dist(noseX,noseY,leX,leY) || 120;
-  try {
-    ctxN.drawImage(video, noseX-d/2, noseY-d/2, d+0.01, d+0.01, 0,0,300,300);
-    ctxL.drawImage(video, leX  -d/2, leY  -d/2, d+0.01, d+0.01, 0,0,300,300);
-    ctxR.drawImage(video, reX  -d/2, reY  -d/2, d+0.01, d+0.01, 0,0,300,300);
-    ctxM.drawImage(video, mX   -d/2, mY   -d/2, d+0.01, d+0.01, 0,0,300,150);
-  } catch(e) { /* ждём первый кадр позы */ }
-
-  if (texNose)  texNose.needsUpdate  = true;
-  if (texEyeL)  texEyeL.needsUpdate  = true;
-  if (texEyeR)  texEyeR.needsUpdate  = true;
-  if (texMouth) texMouth.needsUpdate = true;
-
-  if (renderer && camera && scene){ camera.lookAt(scene.position); renderer.render(scene,camera); controls && controls.update(); }
-}
-
-// ——— Запуск ———
-function boot(){
-  if (started) return; started = true;
-  initThree();
-  startPoseNet();
-  loop();
-}
-</script>
-</body>
-</html>
+<p id="status" aria-live="polite"><
