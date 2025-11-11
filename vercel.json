@@ -3,20 +3,15 @@
     {
       "source": "/(.*)",
       "headers": [
-        // Разрешаем камеру с того же источника:
         { "key": "Permissions-Policy", "value": "camera=(self)" },
-
-        // Для очень старых браузеров (устаревший синтаксис Feature-Policy):
         { "key": "Feature-Policy", "value": "camera 'self'" },
 
-        // Бонус: принудительный HTTPS (HSTS). Не обязателен, но полезен:
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
 
-        // На всякий случай корректный CORS (не влияет на камеру, но полезно):
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
         { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
 
-        // COOP/COEP не обязательны для getUserMedia, но не мешают.
+        
       ]
     }
   ]
