@@ -389,10 +389,29 @@
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  new THREE.MeshBasicMaterial({ map: texNose  }));
-    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  new THREE.MeshBasicMaterial({ map: texLEye  }));
-    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  new THREE.MeshBasicMaterial({ map: texREye  }));
-    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55),  new THREE.MeshBasicMaterial({ map: texMouth }));
+    // ===== МЕХАНИКА С РАЗНЫМИ ГРАНЯМИ =====
+    // создаём массив из 6 материалов для каждого куба (по умолчанию — одна и та же текстура на всех гранях)
+    const createAllFacesMat = (tex) => {
+      const mat = new THREE.MeshBasicMaterial({ map: tex });
+      return [mat, mat, mat, mat, mat, mat]; // при желании можешь сюда подставить разные материалы
+    };
+
+    cube01 = new THREE.Mesh(
+      new THREE.BoxGeometry(70, 90, 70),
+      createAllFacesMat(texNose)   // нос на всех 6 гранях
+    );
+    cube02 = new THREE.Mesh(
+      new THREE.BoxGeometry(60, 60, 60),
+      createAllFacesMat(texLEye)   // левый глаз на всех 6 гранях
+    );
+    cube03 = new THREE.Mesh(
+      new THREE.BoxGeometry(60, 60, 60),
+      createAllFacesMat(texREye)   // правый глаз на всех 6 гранях
+    );
+    cube04 = new THREE.Mesh(
+      new THREE.BoxGeometry(120, 55, 55),
+      createAllFacesMat(texMouth)  // рот на всех 6 гранях
+    );
 
     [cube01, cube02, cube03, cube04].forEach(c=>{
       c.rotation.set(0,0,0);
@@ -505,10 +524,10 @@
     } catch(e){}
   }
 
-  // 🔥 Новый drawCrop: берём больше области вокруг части лица (ZOOM_OUT > 1)
+  // менее зазумленный crop: берём область чуть больше бокса (ZOOM_OUT > 1)
   function drawCrop(dstCtx, b, dw, dh){
     if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
-      // если бокса нет — используем фулл-кадр как раньше
+      // если бокса нет — используем фулл-кадр
       drawFull(dstCtx, dw, dh);
       return;
     }
@@ -516,9 +535,8 @@
     const vw = video.videoWidth || video.width || 480;
     const vh = video.videoHeight || video.height || 640;
 
-    // коэффициент "отдаления":
-    // 1.0 = как было, 1.4 = видно больше лица в кубе
-    const ZOOM_OUT = 1.4;
+    // коэффициент "отдаления": 1.0 = как было, 1.2 = видно больше лица в кубе
+    const ZOOM_OUT = 1.2;
 
     // центр бокса
     const cx = b.x + b.w / 2;
@@ -558,10 +576,18 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
-    if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
-    if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
-    if (cube04?.material?.map) cube04.material.map.needsUpdate = true;
+    // безопасно обновляем текстуры, учитывая что material может быть массивом
+    [cube01, cube02, cube03, cube04].forEach(cube => {
+      if (cube && cube.material) {
+        if (Array.isArray(cube.material)) {
+          cube.material.forEach(mat => {
+            if (mat.map) mat.map.needsUpdate = true;
+          });
+        } else if (cube.material.map) {
+          cube.material.map.needsUpdate = true;
+        }
+      }
+    });
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
