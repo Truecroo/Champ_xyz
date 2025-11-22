@@ -380,7 +380,7 @@
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
     // 🔥 СОЗДАЕМ МАССИВ МАТЕРИАЛОВ ДЛЯ 6 ГРАНЕЙ
-    // Каждая грань куба получит свою текстуру части лица
+    // Каждый объект BoxGeometry по умолчанию имеет 6 граней:
     // [0]: правая, [1]: левая, [2]: верхняя, [3]: нижняя, [4]: передняя, [5]: задняя
     const materials = [
       new THREE.MeshBasicMaterial({ map: texREye }),   // Правая (правый глаз)
@@ -561,22 +561,27 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // 🔥 ОБНОВЛЕНИЕ ТЕКСТУР ДЛЯ ВСЕХ 6 ГРАНЕЙ
-    // Все кубы используют один и тот же массив материалов (materials), поэтому
-    // достаточно обновить карты только у одного из них, например, у cube01.
-    if (Array.isArray(cube01.material)) {
-      cube01.material.forEach(mat => {
-        if (mat.map && mat.map.isCanvasTexture) {
-          mat.map.needsUpdate = true;
-        }
-      });
-    } else {
-      // Старый код для подстраховки, если что-то пойдет не так с Array.isArray
-      if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
-      if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
-      if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
-      if (cube04?.material?.map) cube04.material.map.needsUpdate = true;
-    }
+    // 🔥 ИСПРАВЛЕННЫЙ КОД ДЛЯ ОБНОВЛЕНИЯ ВСЕХ ТЕКСТУР ГРАНЕЙ
+    // Проверяем, является ли material массивом (для 6 граней) или одиночным объектом
+    const materials = Array.isArray(cube01.material) ? cube01.material : [cube01.material];
+
+    // Обновляем карты только один раз, так как все кубы используют одни и те же 4 CanvasTexture,
+    // просто в разном порядке в массиве. Достаточно обновить только те CanvasTexture,
+    // которые были созданы из канвасов (texNose, texLEye, texREye, texMouth).
+   
+    // Мы будем искать уникальные CanvasTexture в массиве материалов:
+    const texturesToUpdate = new Set();
+    materials.forEach(mat => {
+      if (mat && mat.map && mat.map.isCanvasTexture) {
+        texturesToUpdate.add(mat.map);
+      }
+    });
+
+    // Теперь обновляем уникальные текстуры
+    texturesToUpdate.forEach(map => {
+      map.needsUpdate = true;
+    });
+
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
