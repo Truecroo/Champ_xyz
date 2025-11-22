@@ -391,9 +391,13 @@
 
     // ===== МЕХАНИКА С РАЗНЫМИ ГРАНЯМИ =====
     // создаём массив из 6 материалов для каждого куба (по умолчанию — одна и та же текстура на всех гранях)
-    const createAllFacesMat = (tex) => {
-      const mat = new THREE.MeshBasicMaterial({ map: tex });
-      return [mat, mat, mat, mat, mat, mat]; // при желании можешь сюда подставить разные материалы
+    const createAllFacesMat = (texFront, texBack, texOther) => {
+  const mFront = new THREE.MeshBasicMaterial({ map: texFront });
+  const mBack  = new THREE.MeshBasicMaterial({ map: texBack });
+  const mSide  = new THREE.MeshBasicMaterial({ map: texOther });
+  return [mSide, mSide, mSide, mSide, mFront, mBack]; // порядок граней: +X, -X, +Y, -Y, +Z, -Z
+};
+
     };
 
     cube01 = new THREE.Mesh(
