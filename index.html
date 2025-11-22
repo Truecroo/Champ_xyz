@@ -389,6 +389,64 @@
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
+    // ===== МАТЕРИАЛЫ ДЛЯ ЧАСТЕЙ ЛИЦА =====
+    // Один материал на каждую текстуру (шарим между всеми кубами)
+    const matNose  = new THREE.MeshBasicMaterial({ map: texNose  });
+    const matLEye  = new THREE.MeshBasicMaterial({ map: texLEye  });
+    const matREye  = new THREE.MeshBasicMaterial({ map: texREye  });
+    const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
+
+    // Порядок граней BoxGeometry в three.js:
+    // 0: +X, 1: -X, 2: +Y, 3: -Y, 4: +Z (фронт), 5: -Z (задняя)
+    function facesForCube(frontMat) {
+      const all = [matNose, matLEye, matREye, matMouth];
+      const others = all.filter(m => m !== frontMat);
+
+      // тут можно играться — я сделал так, чтобы:
+      // - фронт (+Z) = frontMat
+      // - задняя (-Z) = другая часть лица
+      // - боковые / верх-низ — микс остальных
+      return [
+        others[0],  // +X
+        others[1],  // -X
+        others[2] || others[0], // +Y
+        others[1],  // -Y
+        frontMat,   // +Z (лицевая)
+        others[2] || others[0]  // -Z (задняя)
+      ];
+    }
+
+    // КУБЫ С РАЗНЫМИ ЛИЦЕВЫМИ ГРАНЯМИ, НО СТАРЫМИ ФОРМАМИ
+    // cube01 — "нос-куб": лицевая грань = нос
+    cube01 = new THREE.Mesh(
+      new THREE.BoxGeometry(70, 90, 70),
+      facesForCube(matNose)
+    );
+
+    // cube02 — "левый глаз": лицевая грань = левый глаз
+    cube02 = new THREE.Mesh(
+      new THREE.BoxGeometry(60, 60, 60),
+      facesForCube(matLEye)
+    );
+
+    // cube03 — "правый глаз": лицевая грань = правый глаз
+    cube03 = new THREE.Mesh(
+      new THREE.BoxGeometry(60, 60, 60),
+      facesForCube(matREye)
+    );
+
+    // cube04 — "рот": лицевая грань = рот
+    cube04 = new THREE.Mesh(
+      new THREE.BoxGeometry(120, 55, 55),
+      facesForCube(matMouth)
+    );
+
+    [cube01, cube02, cube03, cube04].forEach(c=>{
+      c.rotation.set(0,0,0);
+      c.position.z = FIXED_Z;
+      scene.add(c);
+    });
+
     // ===== МЕХАНИКА С РАЗНЫМИ ГРАНЯМИ =====
     // создаём массив из 6 материалов для каждого куба (по умолчанию — одна и та же текстура на всех гранях)
     const createAllFacesMat = (texFront, texBack, texOther) => {
