@@ -1,583 +1,571 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <title>Куб-селфи</title>
-  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <meta charset="utf-8" />
+  <title>Куб-селфи</title>
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <!-- jQuery -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- THREE.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <!-- MediaPipe FaceMesh -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
-    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+  <!-- ml5 PoseNet (fallback) -->
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
-  <style>
-    /* убираем прокрутку/оверскролл и жесты страницы */
-    html, body {
-      height:100%;
-      margin:0;
-      background:#000;
-      color:#fff;
-      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      overflow:hidden;
-      overscroll-behavior:none;
-      touch-action:none;
-    }
+  <style>
+    /* убираем прокрутку/оверскролл и жесты страницы */
+    html, body {
+      height:100%;
+      margin:0;
+      background:#000;
+      color:#fff;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      overflow:hidden;
+      overscroll-behavior:none;
+      touch-action:none;
+    }
 
-    #permission-screen {
-      position:fixed; inset:0;
-      display:flex; flex-direction:column;
-      align-items:center; justify-content:center;
-      gap:16px; background:#000;
-      z-index:10; padding:24px; text-align:center;
-    }
+    #permission-screen {
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:16px; background:#000;
+      z-index:10; padding:24px; text-align:center;
+    }
 
-    #button_loader, .downloadButton, .questionButton {
-      padding:10px 16px;
-      border:1px solid #fff;
-      background:transparent;
-      color:#fff;
-      border-radius:8px;
-      cursor:pointer;
-    }
+    #button_loader, .downloadButton, .questionButton {
+      padding:10px 16px;
+      border:1px solid #fff;
+      background:transparent;
+      color:#fff;
+      border-radius:8px;
+      cursor:pointer;
+    }
 
-    #container {
-      position:fixed; inset:0;
-      display:none;
-      touch-action:none;
-    }
+    #container {
+      position:fixed; inset:0;
+      display:none;
+      touch-action:none;
+    }
 
-    #about {
-      position:fixed;
-      right:12px; bottom:12px;
-    }
+    #about {
+      position:fixed;
+      right:12px; bottom:12px;
+    }
 
-    #aboutText {
-      display:none;
-      position:fixed;
-      right:12px; bottom:60px;
-      width:260px;
-      background:rgba(0,0,0,.7);
-      padding:12px;
-      border-radius:8px;
-      font-size:13px;
-      line-height:1.4;
-    }
+    #aboutText {
+      display:none;
+      position:fixed;
+      right:12px; bottom:60px;
+      width:260px;
+      background:rgba(0,0,0,.7);
+      padding:12px;
+      border-radius:8px;
+      font-size:13px;
+      line-height:1.4;
+    }
 
-    #download_div {
-      position:fixed;
-      left:12px; bottom:12px;
-      display:none;
-    }
+    #download_div {
+      position:fixed;
+      left:12px; bottom:12px;
+      display:none;
+    }
 
-    #discription {
-      position:fixed;
-      top:12px; left:12px;
-      background:rgba(0,0,0,.35);
-      padding:8px 10px;
-      border-radius:8px;
-      font-size:13px;
-    }
+    #discription {
+      position:fixed;
+      top:12px; left:12px;
+      background:rgba(0,0,0,.35);
+      padding:8px 10px;
+      border-radius:8px;
+      font-size:13px;
+    }
 
-    #loading-screen {
-      position:fixed; inset:0;
-      display:none;
-      align-items:center; justify-content:center;
-      background:#000; z-index:9;
-    }
+    #loading-screen {
+      position:fixed; inset:0;
+      display:none;
+      align-items:center; justify-content:center;
+      background:#000; z-index:9;
+    }
 
-    #loading_gif {
-      width:120px; height:120px;
-      opacity:.8;
-    }
+    #loading_gif {
+      width:120px; height:120px;
+      opacity:.8;
+    }
 
-    video {
-      opacity:0;
-      width:0; height:0;
-      position:absolute; left:-9999px;
-    }
+    video {
+      opacity:0;
+      width:0; height:0;
+      position:absolute; left:-9999px;
+    }
 
-    canvas { image-rendering:auto; }
+    canvas { image-rendering:auto; }
 
-    a { color:#9ad1ff; }
-  </style>
+    a { color:#9ad1ff; }
+  </style>
 </head>
 
 <body>
 
-  <div id="loading-screen" class="wrapper">
-    <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…" />
-  </div>
+  <div id="loading-screen" class="wrapper">
+    <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…" />
+  </div>
 
-  <section id="permission-screen">
-    <div id="loader">
-      <strong>Нужно разрешение на камеру</strong><br />
-      Нажми «Продолжить» и в диалоге браузера выбери «Разрешить».<br />
-      Видео никуда не сохраняется.
-    </div>
-    <button id="button_loader">Продолжить</button>
-    <div style="opacity:.6; font-size:13px;">
-      Если видишь «доступ запрещён» — открой настройки сайта в адресной строке и разреши камеру.
-    </div>
-  </section>
+  <section id="permission-screen">
+    <div id="loader">
+      <strong>Нужно разрешение на камеру</strong><br />
+      Нажми «Продолжить» и в диалоге браузера выбери «Разрешить».<br />
+      Видео никуда не сохраняется.
+    </div>
+    <button id="button_loader">Продолжить</button>
+    <div style="opacity:.6; font-size:13px;">
+      Если видишь «доступ запрещён» — открой настройки сайта в адресной строке и разреши камеру.
+    </div>
+  </section>
 
-  <div id="container"></div>
+  <div id="container"></div>
 
-    <canvas id="canvas04" width="512" height="512" style="display:none"></canvas>    <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>    <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>    <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>      <video autoplay muted playsinline id="video" width="480" height="640"></video>
+  <!-- Текстурные канвасы -->
+  <canvas id="canvas04" width="512" height="512" style="display:none"></canvas>  <!-- нос -->
+  <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
+  <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
+  <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- левый глаз -->
 
-  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
+  <!-- Скрытое видео -->
+  <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="about">
-    <div id="aboutText">
-      <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
-      <p class="credits">
-        Технологии:
-        <a href="https://threejs.org/">Three.js</a>,
-        <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>,
-        <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
-      </p>
-    </div>
-    <button class="questionButton" id="aboutButton">Инфо</button>
-  </div>
+  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
 
-  <div id="download_div">
-    <button class="downloadButton" id="download">Сделать снимок</button>
-  </div>
+  <div id="about">
+    <div id="aboutText">
+      <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
+      <p class="credits">
+        Технологии:
+        <a href="https://threejs.org/">Three.js</a>,
+        <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>,
+        <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
+      </p>
+    </div>
+    <button class="questionButton" id="aboutButton">Инфо</button>
+  </div>
+
+  <div id="download_div">
+    <button class="downloadButton" id="download">Сделать снимок</button>
+  </div>
 
 <script>
-  // ===== глушим скролл/свайпы страницы (на всякий случай помимо CSS) =====
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
-  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
+  // ===== глушим скролл/свайпы страницы (на всякий случай помимо CSS) =====
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+  document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
 
-  // ===== DOM & helpers =====
-  const video = document.getElementById("video");
-  video.setAttribute('playsinline','true');
-  video.setAttribute('muted','true');
-  video.muted = true;
+  // ===== DOM & helpers =====
+  const video = document.getElementById("video");
+  video.setAttribute('playsinline','true');
+  video.setAttribute('muted','true');
+  video.muted = true;
 
-  const nose_canvas  = document.getElementById("canvas04"); const ctxNose  = nose_canvas.getContext("2d");
-  const left_canvas  = document.getElementById("Mycanvas"); const ctxLEye  = left_canvas.getContext("2d");
-  const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
-  const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
+  const nose_canvas  = document.getElementById("canvas04"); const ctxNose  = nose_canvas.getContext("2d");
+  const left_canvas  = document.getElementById("Mycanvas"); const ctxLEye  = left_canvas.getContext("2d");
+  const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
+  const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
 
-  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const rand=(a,b)=>Math.random()*(b-a)+a;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const rand=(a,b)=>Math.random()*(b-a)+a;
 
-  // ===== Three.js =====
-  let scene, renderer;
-  let camera, orthoCamera, activeCamera;
-  let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
-  const FIXED_Z = 0;
+  // ===== Three.js =====
+  let scene, renderer;
+  let camera, orthoCamera, activeCamera;
+  let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
+  const FIXED_Z = 0;
 
-  // «свои» орбит-контролы (zoom-out по умолчанию)
-  let radius = 600;             // отдаление сцены
-  let azimuth = 0;              // горизонтальный угол
-  let polar = Math.PI/2;        // вертикальный угол
-  const polarMin = Math.PI/6;
-  const polarMax = Math.PI*5/6;
-  let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
+  // «свои» орбит-контролы (zoom-out по умолчанию)
+  let radius = 600;             // отдаление сцены
+  let azimuth = 0;              // горизонтальный угол
+  let polar = Math.PI/2;        // вертикальный угол
+  const polarMin = Math.PI/6;
+  const polarMax = Math.PI*5/6;
+  let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
 
-  // ===== Лендмарки/боксы =====
-  let firstPredictionCame = false;
-  window._bbNose = null; window._bbLEye = null; window._bbREye = null; window._bbMouth = null;
-  let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
+  // ===== Лендмарки/боксы =====
+  let firstPredictionCame = false;
+  window._bbNose = null; window._bbLEye = null; window._bbREye = null; window._bbMouth = null;
+  let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 
-  // ===== UI =====
-  $("#download").on("click", function(){
-    const dataURL = renderer.domElement.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = "selfie.png"; link.href = dataURL; link.target = "_blank"; link.click();
-  });
+  // ===== UI =====
+  $("#download").on("click", function(){
+    const dataURL = renderer.domElement.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = "selfie.png"; link.href = dataURL; link.target = "_blank"; link.click();
+  });
 
-  $("#aboutButton").on("click", function(){
-    $("#aboutText").fadeToggle('fast');
-    $("#aboutButton").text(($("#aboutButton").text() === 'Инфо') ? 'Закрыть' : 'Инфо').fadeIn();
-  });
+  $("#aboutButton").on("click", function(){
+    $("#aboutText").fadeToggle('fast');
+    $("#aboutButton").text(($("#aboutButton").text() === 'Инфо') ? 'Закрыть' : 'Инфо').fadeIn();
+  });
 
-  $("#container, #discription").on('touchstart mousedown', function(){
-    $("#discription").fadeOut('fast');
-  });
+  $("#container, #discription").on('touchstart mousedown', function(){
+    $("#discription").fadeOut('fast');
+  });
 
-  // ===== Камера + ошибки =====
-  async function askCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
-      video.srcObject = stream;
+  // ===== Камера + ошибки =====
+  async function askCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
+      video.srcObject = stream;
 
-      if (video.readyState < 1) await new Promise(r => (video.onloadedmetadata = r));
-      await video.play();
+      if (video.readyState < 1) await new Promise(r => (video.onloadedmetadata = r));
+      await video.play();
 
-      await new Promise(r=>setTimeout(r,50));
-      video.width  = video.videoWidth  || 480;
-      video.height = video.videoHeight || 640;
+      await new Promise(r=>setTimeout(r,50));
+      video.width  = video.videoWidth  || 480;
+      video.height = video.videoHeight || 640;
 
-      return true;
-    } catch (err) {
-      console.error('[getUserMedia error]', err.name, err.message);
-      const hints = {
-        NotAllowedError:    'Доступ к камере запрещён для этого сайта. Разреши камеру в настройках сайта и перезагрузи страницу.',
-        NotFoundError:      'Камера не найдена. Подключи камеру или выбери её в настройках системы/браузера.',
-        NotReadableError:   'Камера занята другим приложением. Закрой приложения, использующие камеру, и попробуй снова.',
-        OverconstrainedError:'Выбранные параметры камеры недоступны. Попробуй стандартный режим.',
-        SecurityError:      'Нужен HTTPS (или http://localhost).',
-        TypeError:          'Неверные параметры запроса к камере.'
-      };
-      alert(hints[err.name] || ('Ошибка камеры: ' + err.message));
-      return false;
-    }
-  }
+      return true;
+    } catch (err) {
+      console.error('[getUserMedia error]', err.name, err.message);
+      const hints = {
+        NotAllowedError:    'Доступ к камере запрещён для этого сайта. Разреши камеру в настройках сайта и перезагрузи страницу.',
+        NotFoundError:      'Камера не найдена. Подключи камеру или выбери её в настройках системы/браузера.',
+        NotReadableError:   'Камера занята другим приложением. Закрой приложения, использующие камеру, и попробуй снова.',
+        OverconstrainedError:'Выбранные параметры камеры недоступны. Попробуй стандартный режим.',
+        SecurityError:      'Нужен HTTPS (или http://localhost).',
+        TypeError:          'Неверные параметры запроса к камере.'
+      };
+      alert(hints[err.name] || ('Ошибка камеры: ' + err.message));
+      return false;
+    }
+  }
 
-  // ===== Кнопка «Продолжить» =====
-  $("#button_loader").on("click", async function(){
-    $("#permission-screen").fadeOut('slow');
-    $("#loading-screen").show();
+  // ===== Кнопка «Продолжить» =====
+  $("#button_loader").on("click", async function(){
+    $("#permission-screen").fadeOut('slow');
+    $("#loading-screen").show();
 
-    const ok = await askCamera();
-    if (!ok) { $("#loading-screen").hide(); $("#permission-screen").show(); return; }
+    const ok = await askCamera();
+    if (!ok) { $("#loading-screen").hide(); $("#permission-screen").show(); return; }
 
-    $("#container").fadeIn('slow');
-    $("#download_div").fadeIn('slow');
-    $("#aboutButton").fadeIn('slow');
+    $("#container").fadeIn('slow');
+    $("#download_div").fadeIn('slow');
+    $("#aboutButton").fadeIn('slow');
 
-    initThree();
-    bootTrackers();
-    changePosition();
-    animate();
+    initThree();
+    bootTrackers();
+    changePosition();
+    animate();
 
-    // можно оставить лоадер на пару секунд, чтобы всё успело прогрузиться
-    setTimeout(()=>$("#loading-screen").fadeOut('fast'), 2000);
-  });
+    // можно оставить лоадер на пару секунд, чтобы всё успело прогрузиться
+    setTimeout(()=>$("#loading-screen").fadeOut('fast'), 2000);
+  });
 
-  // ===== Трекеры =====
-  function bootTrackers(){
-    // MediaPipe FaceMesh
-    try {
-      const fm = new FaceMesh.FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-      });
-      fm.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-      fm.onResults(onFaceMeshResults);
-      let busy = false;
-      (function pump(){
-        if (!busy && video.videoWidth){
-          busy = true;
-          fm.send({ image: video }).catch(()=>{}).finally(()=>{ busy=false; });
-        }
-        requestAnimationFrame(pump);
-      })();
-    } catch(e) { console.warn('FaceMesh не запустился:', e); }
+  // ===== Трекеры =====
+  function bootTrackers(){
+    // MediaPipe FaceMesh
+    try {
+      const fm = new FaceMesh.FaceMesh({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+      });
+      fm.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+      fm.onResults(onFaceMeshResults);
+      let busy = false;
+      (function pump(){
+        if (!busy && video.videoWidth){
+          busy = true;
+          fm.send({ image: video }).catch(()=>{}).finally(()=>{ busy=false; });
+        }
+        requestAnimationFrame(pump);
+      })();
+    } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
-    // PoseNet fallback
-    try {
-      const net = ml5.poseNet(video, () => {});
-      net.on('pose', onPoseNetResults);
-    } catch(e) { console.warn('PoseNet не запустился:', e); }
-  }
+    // PoseNet fallback
+    try {
+      const net = ml5.poseNet(video, () => {});
+      net.on('pose', onPoseNetResults);
+    } catch(e) { console.warn('PoseNet не запустился:', e); }
+  }
 
-  function onFaceMeshResults(res){
-    const faces = res.multiFaceLandmarks || [];
-    if (!faces.length) return;
-    firstPredictionCame = true;
+  function onFaceMeshResults(res){
+    const faces = res.multiFaceLandmarks || [];
+    if (!faces.length) return;
+    firstPredictionCame = true;
 
-    const pts = faces[0];
-    const IDX = {
-      leftEye:  [33,133,160,159,158,157,173],
-      rightEye: [362,263,387,386,385,384,398],
-      nose:     [1,6,197,195,5,4,45],
-      mouth:    [78,95,88,178,87,14,317,308,324]
-    };
-
-    function bboxNorm(idxs){
-      let minX=1,minY=1,maxX=0,maxY=0;
-      for (const i of idxs){
-        const p=pts[i]; if(!p) continue; const x=p.x,y=p.y;
-        if(x<minX)minX=x; if(y<minY)minY=y;
-        if(x>maxX)maxX=x; if(y>maxY)maxY=y;
-      }
-      return {x:minX, y:minY, w:Math.max(1e-3,maxX-minX), h:Math.max(1e-3,maxY-minY)};
-    }
-    function toPixels(b, pad=0.03){
-      const vw = video.videoWidth || video.width || 480;
-      const vh = video.videoHeight || video.height || 640;
-      const px = Math.max(0, b.x - pad) * vw;
-      const py = Math.max(0, b.y - pad) * vh;
-      const pw = Math.min(1, b.w + pad*2) * vw;
-      const ph = Math.min(1, b.h + pad*2) * vh;
-      return { x:px, y:py, w:pw, h:ph };
-    }
-
-    window._bbLEye  = toPixels(bboxNorm(IDX.leftEye),  0.04);
-    window._bbREye  = toPixels(bboxNorm(IDX.rightEye), 0.04);
-    window._bbNose  = toPixels(bboxNorm(IDX.nose),     0.05);
-    window._bbMouth = toPixels(bboxNorm(IDX.mouth),    0.05);
-  }
-
-  function onPoseNetResults(res){
-    if (!res || !res.length) return;
-    const k = res[0].pose.keypoints;
-    const nX = k[0].position.x, nY = k[0].position.y;
-    const Lx = k[1].position.x, Ly = k[1].position.y;
-    const Rx = k[2].position.x, Ry = k[2].position.y;
-
-    const lerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
-    noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
-    leX   = lerp(leX  ,Lx,.5); leY   = lerp(leY  ,Ly,.5);
-    reX   = lerp(reX  ,Rx,.5); reY   = lerp(reY  ,Ry,.5);
-
-    const d = Math.hypot(noseX-leX, noseY-leY) || 120;
-    mX = lerp(mX,noseX,.5); mY = lerp(mY,noseY + d,.5);
-
-    const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
-    const sz = Math.max(40, Math.min(300, d));
-    if (!firstPredictionCame) {
-      window._bbNose  = makeBox(noseX, noseY, sz);
-      window._bbLEye  = makeBox(leX,   leY,   sz);
-      window._bbREye  = makeBox(reX,   reY,   sz);
-      window._bbMouth = { x:mX - sz/2, y:mY - sz/2, w:sz, h:sz*0.5 };
-    }
-  }
-
-  // ===== Three setup (кастомный «орбит» + zoom-out) =====
-  function initThree(){
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0b0b);
-
-    renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.getElementById('container').appendChild(renderer.domElement);
-
-    const aspect = window.innerWidth / window.innerHeight;
-    camera = new THREE.PerspectiveCamera(35, aspect, 0.1, 2000);
-
-    updateCameraFromSpherical();
-    camera.lookAt(0,0,0);
-
-    const frustumSize = 400;
-    orthoCamera = new THREE.OrthographicCamera(
-      -frustumSize*aspect/2, frustumSize*aspect/2,
-       frustumSize/2, -frustumSize/2,
-       0.1, 2000
-    );
-    activeCamera = camera;
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir.position.set(300, 400, 500);
-    scene.add(dir);
-
-    const texNose  = new THREE.CanvasTexture(nose_canvas);
-    const texLEye  = new THREE.CanvasTexture(left_canvas);
-    const texREye  = new THREE.CanvasTexture(right_canvas);
-    const texMouth = new THREE.CanvasTexture(mouth_canvas);
-
-    // === ИЗМЕНЕНИЕ 1: Функция для создания массива одинаковых материалов для всех 6 граней ===
-    // Это нужно, чтобы перевести кубы на поддержку многогранности, но сохранить исходный вид.
-    const createAllFacesMat = (tex) => {
-         const mat = new THREE.MeshBasicMaterial({ map: tex });
-         // Возвращаем массив из 6 одинаковых материалов. Индекс 4 - это передняя грань (+Z).
-         return [mat, mat, mat, mat, mat, mat];
+    const pts = faces[0];
+    const IDX = {
+      leftEye:  [33,133,160,159,158,157,173],
+      rightEye: [362,263,387,386,385,384,398],
+      nose:     [1,6,197,195,5,4,45],
+      mouth:    [78,95,88,178,87,14,317,308,324]
     };
 
-    // === ИЗМЕНЕНИЕ 2: Применяем массивы материалов к кубам ===
-    // Теперь у кубов есть техническая возможность иметь разные грани.
-    // Изначально все грани (включая переднюю) будут показывать текстуру, соответствующую форме куба.
-    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  createAllFacesMat(texNose));  // Форма носа -> везде нос
-    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  createAllFacesMat(texLEye));  // Форма Л.глаза -> везде Л.глаз
-    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  createAllFacesMat(texREye));  // Форма П.глаза -> везде П.глаз
-    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55), createAllFacesMat(texMouth)); // Форма рта -> везде рот
+    function bboxNorm(idxs){
+      let minX=1,minY=1,maxX=0,maxY=0;
+      for (const i of idxs){
+        const p=pts[i]; if(!p) continue; const x=p.x,y=p.y;
+        if(x<minX)minX=x; if(y<minY)minY=y;
+        if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+      }
+      return {x:minX, y:minY, w:Math.max(1e-3,maxX-minX), h:Math.max(1e-3,maxY-minY)};
+    }
+    function toPixels(b, pad=0.03){
+      const vw = video.videoWidth || video.width || 480;
+      const vh = video.videoHeight || video.height || 640;
+      const px = Math.max(0, b.x - pad) * vw;
+      const py = Math.max(0, b.y - pad) * vh;
+      const pw = Math.min(1, b.w + pad*2) * vw;
+      const ph = Math.min(1, b.h + pad*2) * vh;
+      return { x:px, y:py, w:pw, h:ph };
+    }
 
-    [cube01, cube02, cube03, cube04].forEach(c=>{
-      c.rotation.set(0,0,0);
-      c.position.z = FIXED_Z;
-      scene.add(c);
-    });
+    window._bbLEye  = toPixels(bboxNorm(IDX.leftEye),  0.04);
+    window._bbREye  = toPixels(bboxNorm(IDX.rightEye), 0.04);
+    window._bbNose  = toPixels(bboxNorm(IDX.nose),     0.05);
+    window._bbMouth = toPixels(bboxNorm(IDX.mouth),    0.05);
+  }
 
-    window.addEventListener('resize', onResize);
+  function onPoseNetResults(res){
+    if (!res || !res.length) return;
+    const k = res[0].pose.keypoints;
+    const nX = k[0].position.x, nY = k[0].position.y;
+    const Lx = k[1].position.x, Ly = k[1].position.y;
+    const Rx = k[2].position.x, Ry = k[2].position.y;
 
-    // Жесты: перетаскивание — вращение камеры; короткий тап — перемешать
-    document.addEventListener('pointerdown', e=>{
-      dragging=true; moved=false; dragStartTime=Date.now();
-      lastX=e.clientX; lastY=e.clientY;
-    }, {passive:true});
+    const lerp=(a,b,t)=>a+(b-a)*Math.max(0,Math.min(1,t));
+    noseX = lerp(noseX,nX,.5); noseY = lerp(noseY,nY,.5);
+    leX   = lerp(leX  ,Lx,.5); leY   = lerp(leY  ,Ly,.5);
+    reX   = lerp(reX  ,Rx,.5); reY   = lerp(reY  ,Ry,.5);
 
-    document.addEventListener('pointermove', e=>{
-      if(!dragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      if (Math.abs(dx)>2 || Math.abs(dy)>2) moved=true;
+    const d = Math.hypot(noseX-leX, noseY-leY) || 120;
+    mX = lerp(mX,noseX,.5); mY = lerp(mY,noseY + d,.5);
 
-      const ROT_SPEED = 0.005;
-      azimuth += dx * ROT_SPEED;
-      polar   -= dy * ROT_SPEED;
-      polar = Math.max(polarMin, Math.min(polarMax, polar));
+    const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
+    const sz = Math.max(40, Math.min(300, d));
+    if (!firstPredictionCame) {
+      window._bbNose  = makeBox(noseX, noseY, sz);
+      window._bbLEye  = makeBox(leX,   leY,   sz);
+      window._bbREye  = makeBox(reX,   reY,   sz);
+      window._bbMouth = { x:mX - sz/2, y:mY - sz/2, w:sz, h:sz*0.5 };
+    }
+  }
 
-      lastX = e.clientX; lastY = e.clientY;
-      updateCameraFromSpherical();
-    }, {passive:true});
+  // ===== Three setup (кастомный «орбит» + zoom-out) =====
+  function initThree(){
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0b0b);
 
-    document.addEventListener('pointerup', e=>{
-      if(!dragging) return;
-      const tap = !moved && (Date.now()-dragStartTime < 250);
-      dragging=false;
-      if (tap) onTap(e);
-    }, {passive:true});
-  }
+    renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('container').appendChild(renderer.domElement);
 
-  function updateCameraFromSpherical(){
-    const sinP = Math.sin(polar), cosP = Math.cos(polar);
-    const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
-    const x = radius * sinP * cosA;
-    const y = radius * cosP;
-    const z = radius * sinP * sinA;
-    camera.position.set(x,y,z);
-    camera.lookAt(0,0,0);
-  }
+    const aspect = window.innerWidth / window.innerHeight;
+    camera = new THREE.PerspectiveCamera(35, aspect, 0.1, 2000);
 
-  // Рандомное положение кубов как в оригинале
-  function changePosition(){
-    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
-    const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
-    do{
-      cube01.rotation.y  = rand(0.1,0.5);
-      cube02.rotation.y  = rand(0.1,0.5);
-      cube03.rotation.y  = rand(0.1,0.5);
-      cube04.rotation.y  = rand(0.1,0.5);
+    updateCameraFromSpherical();
+    camera.lookAt(0,0,0);
 
-      cube01.position.set(rand(-55,55),  rand(-140,140), 0);
-      cube02.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube03.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube04.position.set(rand(-45,45),  rand(-155,155), 0);
+    const frustumSize = 400;
+    orthoCamera = new THREE.OrthographicCamera(
+      -frustumSize*aspect/2, frustumSize*aspect/2,
+       frustumSize/2, -frustumSize/2,
+       0.1, 2000
+    );
+    activeCamera = camera;
 
-      d1=F(cube01.position,cube02.position);
-      d2=F(cube02.position,cube03.position);
-      d3=F(cube01.position,cube03.position);
-      d4=F(cube03.position,cube04.position);
-      d5=F(cube02.position,cube04.position);
-      d6=F(cube01.position,cube04.position);
-    } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
-  }
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(300, 400, 500);
+    scene.add(dir);
 
-  function onResize(){
-    const w = window.innerWidth, h = window.innerHeight, aspect = w/h;
-    camera.aspect = aspect; camera.updateProjectionMatrix();
+    const texNose  = new THREE.CanvasTexture(nose_canvas);
+    const texLEye  = new THREE.CanvasTexture(left_canvas);
+    const texREye  = new THREE.CanvasTexture(right_canvas);
+    const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    const frustumSize = 400;
-    orthoCamera.left = -frustumSize*aspect/2;
-    orthoCamera.right =  frustumSize*aspect/2;
-    orthoCamera.top =    frustumSize/2;
-    orthoCamera.bottom = -frustumSize/2;
-    orthoCamera.updateProjectionMatrix();
+    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  new THREE.MeshBasicMaterial({ map: texNose  }));
+    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  new THREE.MeshBasicMaterial({ map: texLEye  }));
+    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  new THREE.MeshBasicMaterial({ map: texREye  }));
+    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55),  new THREE.MeshBasicMaterial({ map: texMouth }));
 
-    renderer.setSize(w,h);
-    updateCameraFromSpherical();
-  }
-
-  function onTap(e){
-    const downloadRect = document.getElementById("download_div").getBoundingClientRect();
-    const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
-    const x = e.pageX || e.clientX, y = e.pageY || e.clientY;
-    const inDownload = x >= downloadRect.left-5 && x <= downloadRect.right+5 &&
-                       y >= downloadRect.top-5  && y <= downloadRect.bottom+5;
-    const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
-                       y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
-    if (inDownload || inAbout) return;
-    changePosition();
-  }
-
-  // ===== Рендер/нарезка =====
-  function drawFull(dstCtx, dw, dh){
-    try {
-      dstCtx.drawImage(
-        video,
-        0, 0,
-        video.videoWidth || dw,
-        video.videoHeight || dh,
-        0, 0, dw, dh
-      );
-    } catch(e){}
-  }
-
-  // 🔥 Новый drawCrop: берём больше области вокруг части лица (ZOOM_OUT > 1)
-  function drawCrop(dstCtx, b, dw, dh){
-    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
-      // если бокса нет — используем фулл-кадр как раньше
-      drawFull(dstCtx, dw, dh);
-      return;
-    }
-
-    const vw = video.videoWidth || video.width || 480;
-    const vh = video.videoHeight || video.height || 640;
-
-    // коэффициент "отдаления":
-    // 1.0 = как было, 1.4 = видно больше лица в кубе
-    const ZOOM_OUT = 1.2;
-
-    // центр бокса
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-
-    // расширяем бокс
-    let sw = b.w * ZOOM_OUT;
-    let sh = b.h * ZOOM_OUT;
-
-    let sx = cx - sw / 2;
-    let sy = cy - sh / 2;
-
-    // аккуратно подрезаем по краям видеокадра
-    sx = clamp(sx, 0, vw - 1);
-    sy = clamp(sy, 0, vh - 1);
-    sw = clamp(sw, 1, vw - sx);
-    sh = clamp(sh, 1, vh - sy);
-
-    try {
-      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-    } catch(e){}
-  }
-
-  function animate(){
-    requestAnimationFrame(animate);
-
-    const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
-    if (hasLM) {
-      drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
-      drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);
-      drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);
-      drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height);
-    } else {
-      drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
-      drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
-      drawFull(ctxREye,  right_canvas.width, right_canvas.height);
-      drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
-    }
-
-    // === ИЗМЕНЕНИЕ 3: Безопасное обновление текстур для массивов материалов ===
-    // Старый код ломал все, потому что cube.material стал массивом, а не объектом.
-    // Этот код проверяет, массив ли это, и обновляет текстуры корректно.
-    [cube01, cube02, cube03, cube04].forEach(cube => {
-        if (cube && cube.material) {
-            if (Array.isArray(cube.material)) {
-                // Если это массив материалов (наш случай)
-                cube.material.forEach(mat => {
-                    if (mat.map) mat.map.needsUpdate = true;
-                });
-            } else if (cube.material.map) {
-                // Если это одиночный материал (на всякий случай)
-                cube.material.map.needsUpdate = true;
-            }
-        }
+    [cube01, cube02, cube03, cube04].forEach(c=>{
+      c.rotation.set(0,0,0);
+      c.position.z = FIXED_Z;
+      scene.add(c);
     });
 
-    activeCamera.lookAt(0,0,0);
-    renderer.render(scene, activeCamera);
-  }
+    window.addEventListener('resize', onResize);
+
+    // Жесты: перетаскивание — вращение камеры; короткий тап — перемешать
+    document.addEventListener('pointerdown', e=>{
+      dragging=true; moved=false; dragStartTime=Date.now();
+      lastX=e.clientX; lastY=e.clientY;
+    }, {passive:true});
+
+    document.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      if (Math.abs(dx)>2 || Math.abs(dy)>2) moved=true;
+
+      const ROT_SPEED = 0.005;
+      azimuth += dx * ROT_SPEED;
+      polar   -= dy * ROT_SPEED;
+      polar = Math.max(polarMin, Math.min(polarMax, polar));
+
+      lastX = e.clientX; lastY = e.clientY;
+      updateCameraFromSpherical();
+    }, {passive:true});
+
+    document.addEventListener('pointerup', e=>{
+      if(!dragging) return;
+      const tap = !moved && (Date.now()-dragStartTime < 250);
+      dragging=false;
+      if (tap) onTap(e);
+    }, {passive:true});
+  }
+
+  function updateCameraFromSpherical(){
+    const sinP = Math.sin(polar), cosP = Math.cos(polar);
+    const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
+    const x = radius * sinP * cosA;
+    const y = radius * cosP;
+    const z = radius * sinP * sinA;
+    camera.position.set(x,y,z);
+    camera.lookAt(0,0,0);
+  }
+
+  // Рандомное положение кубов как в оригинале
+  function changePosition(){
+    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
+    const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    do{
+      cube01.rotation.y  = rand(0.1,0.5);
+      cube02.rotation.y  = rand(0.1,0.5);
+      cube03.rotation.y  = rand(0.1,0.5);
+      cube04.rotation.y  = rand(0.1,0.5);
+
+      cube01.position.set(rand(-55,55),  rand(-140,140), 0);
+      cube02.position.set(rand(-50,50),  rand(-150,150), 0);
+      cube03.position.set(rand(-50,50),  rand(-150,150), 0);
+      cube04.position.set(rand(-45,45),  rand(-155,155), 0);
+
+      d1=F(cube01.position,cube02.position);
+      d2=F(cube02.position,cube03.position);
+      d3=F(cube01.position,cube03.position);
+      d4=F(cube03.position,cube04.position);
+      d5=F(cube02.position,cube04.position);
+      d6=F(cube01.position,cube04.position);
+    } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
+  }
+
+  function onResize(){
+    const w = window.innerWidth, h = window.innerHeight, aspect = w/h;
+    camera.aspect = aspect; camera.updateProjectionMatrix();
+
+    const frustumSize = 400;
+    orthoCamera.left = -frustumSize*aspect/2;
+    orthoCamera.right =  frustumSize*aspect/2;
+    orthoCamera.top =    frustumSize/2;
+    orthoCamera.bottom = -frustumSize/2;
+    orthoCamera.updateProjectionMatrix();
+
+    renderer.setSize(w,h);
+    updateCameraFromSpherical();
+  }
+
+  function onTap(e){
+    const downloadRect = document.getElementById("download_div").getBoundingClientRect();
+    const aboutRect    = document.getElementById("aboutButton").getBoundingClientRect();
+    const x = e.pageX || e.clientX, y = e.pageY || e.clientY;
+    const inDownload = x >= downloadRect.left-5 && x <= downloadRect.right+5 &&
+                       y >= downloadRect.top-5  && y <= downloadRect.bottom+5;
+    const inAbout    = x >= aboutRect.left-5    && x <= aboutRect.right+5 &&
+                       y >= aboutRect.top-5     && y <= aboutRect.bottom+5;
+    if (inDownload || inAbout) return;
+    changePosition();
+  }
+
+  // ===== Рендер/нарезка =====
+  function drawFull(dstCtx, dw, dh){
+    try {
+      dstCtx.drawImage(
+        video,
+        0, 0,
+        video.videoWidth || dw,
+        video.videoHeight || dh,
+        0, 0, dw, dh
+      );
+    } catch(e){}
+  }
+
+  // 🔥 Новый drawCrop: берём больше области вокруг части лица (ZOOM_OUT > 1)
+  function drawCrop(dstCtx, b, dw, dh){
+    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
+      // если бокса нет — используем фулл-кадр как раньше
+      drawFull(dstCtx, dw, dh);
+      return;
+    }
+
+    const vw = video.videoWidth || video.width || 480;
+    const vh = video.videoHeight || video.height || 640;
+
+    // коэффициент "отдаления":
+    // 1.0 = как было, 1.4 = видно больше лица в кубе
+    const ZOOM_OUT = 1.4;
+
+    // центр бокса
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+
+    // расширяем бокс
+    let sw = b.w * ZOOM_OUT;
+    let sh = b.h * ZOOM_OUT;
+
+    let sx = cx - sw / 2;
+    let sy = cy - sh / 2;
+
+    // аккуратно подрезаем по краям видеокадра
+    sx = clamp(sx, 0, vw - 1);
+    sy = clamp(sy, 0, vh - 1);
+    sw = clamp(sw, 1, vw - sx);
+    sh = clamp(sh, 1, vh - sy);
+
+    try {
+      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+    } catch(e){}
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+
+    const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
+    if (hasLM) {
+      drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
+      drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);
+      drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);
+      drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height);
+    } else {
+      drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
+      drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
+      drawFull(ctxREye,  right_canvas.width, right_canvas.height);
+      drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
+    }
+
+    if (cube01?.material?.map) cube01.material.map.needsUpdate = true;
+    if (cube02?.material?.map) cube02.material.map.needsUpdate = true;
+    if (cube03?.material?.map) cube03.material.map.needsUpdate = true;
+    if (cube04?.material?.map) cube04.material.map.needsUpdate = true;
+
+    activeCamera.lookAt(0,0,0);
+    renderer.render(scene, activeCamera);
+  }
 </script>
 </body>
 </html>
