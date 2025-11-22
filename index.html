@@ -378,22 +378,21 @@
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    // === ИЗМЕНЕНИЕ: Создаем массив из 6 материалов для каждой грани ===
-    // Порядок граней BoxGeometry: +x, -x, +y, -y, +z, -z (право, лево, верх, низ, перед, зад)
-    const faceMaterials = [
-        new THREE.MeshBasicMaterial({ map: texREye }), // Право - правый глаз
-        new THREE.MeshBasicMaterial({ map: texLEye }), // Лево - левый глаз
-        new THREE.MeshBasicMaterial({ map: texNose }), // Верх - нос
-        new THREE.MeshBasicMaterial({ map: texMouth }), // Низ - рот
-        new THREE.MeshBasicMaterial({ map: texNose }), // Перед - нос
-        new THREE.MeshBasicMaterial({ map: texLEye })  // Зад - левый глаз
-    ];
+    // === ИЗМЕНЕНИЕ 1: Функция для создания массива одинаковых материалов для всех 6 граней ===
+    // Это нужно, чтобы перевести кубы на поддержку многогранности, но сохранить исходный вид.
+    const createAllFacesMat = (tex) => {
+         const mat = new THREE.MeshBasicMaterial({ map: tex });
+         // Возвращаем массив из 6 одинаковых материалов. Индекс 4 - это передняя грань (+Z).
+         return [mat, mat, mat, mat, mat, mat];
+    };
 
-    // === ИЗМЕНЕНИЕ: Передаем массив материалов (faceMaterials) вместо одного материала ===
-    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  faceMaterials);
-    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  faceMaterials);
-    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  faceMaterials);
-    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55),  faceMaterials);
+    // === ИЗМЕНЕНИЕ 2: Применяем массивы материалов к кубам ===
+    // Теперь у кубов есть техническая возможность иметь разные грани.
+    // Изначально все грани (включая переднюю) будут показывать текстуру, соответствующую форме куба.
+    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  createAllFacesMat(texNose));  // Форма носа -> везде нос
+    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  createAllFacesMat(texLEye));  // Форма Л.глаза -> везде Л.глаз
+    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  createAllFacesMat(texREye));  // Форма П.глаза -> везде П.глаз
+    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55), createAllFacesMat(texMouth)); // Форма рта -> везде рот
 
     [cube01, cube02, cube03, cube04].forEach(c=>{
       c.rotation.set(0,0,0);
@@ -559,14 +558,22 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // === ИЗМЕНЕНИЕ: Обновляем текстуры. Так как материал теперь массив,
-    // мы пробегаемся по массиву материалов первого куба (cube01)
-    // и ставим флаг обновления на каждый texture map.
-    if (cube01 && Array.isArray(cube01.material)) {
-        cube01.material.forEach(mat => {
-            if (mat.map) mat.map.needsUpdate = true;
-        });
-    }
+    // === ИЗМЕНЕНИЕ 3: Безопасное обновление текстур для массивов материалов ===
+    // Старый код ломал все, потому что cube.material стал массивом, а не объектом.
+    // Этот код проверяет, массив ли это, и обновляет текстуры корректно.
+    [cube01, cube02, cube03, cube04].forEach(cube => {
+        if (cube && cube.material) {
+            if (Array.isArray(cube.material)) {
+                // Если это массив материалов (наш случай)
+                cube.material.forEach(mat => {
+                    if (mat.map) mat.map.needsUpdate = true;
+                });
+            } else if (cube.material.map) {
+                // Если это одиночный материал (на всякий случай)
+                cube.material.map.needsUpdate = true;
+            }
+        }
+    });
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
