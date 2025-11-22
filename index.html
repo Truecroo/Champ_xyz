@@ -257,7 +257,6 @@
     changePosition();
     animate();
 
-    // можно оставить лоадер на пару секунд, чтобы всё успело прогрузиться
     setTimeout(()=>$("#loading-screen").fadeOut('fast'), 2000);
   });
 
@@ -384,33 +383,59 @@
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
+    // ===== ТЕКСТУРЫ С КАНВАСОВ =====
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    // ===== МЕХАНИКА С РАЗНЫМИ ГРАНЯМИ =====
-    // создаём массив из 6 материалов для каждого куба (по умолчанию — одна и та же текстура на всех гранях)
-    const createAllFacesMat = (tex) => {
-      const mat = new THREE.MeshBasicMaterial({ map: tex });
-      return [mat, mat, mat, mat, mat, mat]; // при желании можешь сюда подставить разные материалы
-    };
+    // ===== ОДИН МАТЕРИАЛ НА КАЖДУЮ ЧАСТЬ ЛИЦА (ШАРИМСЯ МЕЖДУ ВСЕМИ КУБАМИ) =====
+    const matNose  = new THREE.MeshBasicMaterial({ map: texNose });
+    const matLEye  = new THREE.MeshBasicMaterial({ map: texLEye });
+    const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
+    const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
+    const allMats = [matNose, matLEye, matREye, matMouth];
+
+    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]
+    function facesForCube(frontMat) {
+      const others = allMats.filter(m => m !== frontMat);
+      // чтобы точно было 3 "других", продублируем при необходимости
+      while (others.length < 3) others.push(others[others.length-1] || frontMat);
+
+      return [
+        others[0],          // +X
+        others[1],          // -X
+        others[2],          // +Y
+        others[1],          // -Y
+        frontMat,           // +Z (лицевая грань)
+        others[0]           // -Z
+      ];
+    }
+
+    // ===== КУБЫ С РАЗНЫМИ ЛИЦЕВЫМИ ГРАНЯМИ, НО СТАРЫМИ ФОРМАМИ =====
+    // cube01 — нос
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
-      createAllFacesMat(texNose)   // нос на всех 6 гранях
+      facesForCube(matNose)
     );
+
+    // cube02 — левый глаз
     cube02 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
-      createAllFacesMat(texLEye)   // левый глаз на всех 6 гранях
+      facesForCube(matLEye)
     );
+
+    // cube03 — правый глаз
     cube03 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
-      createAllFacesMat(texREye)   // правый глаз на всех 6 гранях
+      facesForCube(matREye)
     );
+
+    // cube04 — рот
     cube04 = new THREE.Mesh(
       new THREE.BoxGeometry(120, 55, 55),
-      createAllFacesMat(texMouth)  // рот на всех 6 гранях
+      facesForCube(matMouth)
     );
 
     [cube01, cube02, cube03, cube04].forEach(c=>{
@@ -527,7 +552,6 @@
   // менее зазумленный crop: берём область чуть больше бокса (ZOOM_OUT > 1)
   function drawCrop(dstCtx, b, dw, dh){
     if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
-      // если бокса нет — используем фулл-кадр
       drawFull(dstCtx, dw, dh);
       return;
     }
@@ -535,21 +559,18 @@
     const vw = video.videoWidth || video.width || 480;
     const vh = video.videoHeight || video.height || 640;
 
-    // коэффициент "отдаления": 1.0 = как было, 1.2 = видно больше лица в кубе
+    // «отдаляем» чуть-чуть: видно больше лица
     const ZOOM_OUT = 1.2;
 
-    // центр бокса
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
 
-    // расширяем бокс
     let sw = b.w * ZOOM_OUT;
     let sh = b.h * ZOOM_OUT;
 
     let sx = cx - sw / 2;
     let sy = cy - sh / 2;
 
-    // аккуратно подрезаем по краям видеокадра
     sx = clamp(sx, 0, vw - 1);
     sy = clamp(sy, 0, vh - 1);
     sw = clamp(sw, 1, vw - sx);
@@ -576,7 +597,7 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // безопасно обновляем текстуры, учитывая что material может быть массивом
+    // обновляем текстуры, учитывая массив материалов
     [cube01, cube02, cube03, cube04].forEach(cube => {
       if (cube && cube.material) {
         if (Array.isArray(cube.material)) {
