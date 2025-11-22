@@ -373,29 +373,27 @@
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
-    // Получаем текстуры из канвасов
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    // 🔥 СОЗДАЕМ МАССИВ МАТЕРИАЛОВ ДЛЯ 6 ГРАНЕЙ
-    // Каждый объект BoxGeometry по умолчанию имеет 6 граней:
-    // [0]: правая, [1]: левая, [2]: верхняя, [3]: нижняя, [4]: передняя, [5]: задняя
-    const materials = [
-      new THREE.MeshBasicMaterial({ map: texREye }),   // Правая (правый глаз)
-      new THREE.MeshBasicMaterial({ map: texLEye }),   // Левая (левый глаз)
-      new THREE.MeshBasicMaterial({ map: texNose }),    // Верхняя (нос)
-      new THREE.MeshBasicMaterial({ map: texMouth }),   // Нижняя (рот)
-      new THREE.MeshBasicMaterial({ map: texREye }),   // Передняя (повтор правого глаза)
-      new THREE.MeshBasicMaterial({ map: texNose })    // Задняя (повтор носа)
+    // === ИЗМЕНЕНИЕ: Создаем массив из 6 материалов для каждой грани ===
+    // Порядок граней BoxGeometry: +x, -x, +y, -y, +z, -z (право, лево, верх, низ, перед, зад)
+    const faceMaterials = [
+        new THREE.MeshBasicMaterial({ map: texREye }), // Право - правый глаз
+        new THREE.MeshBasicMaterial({ map: texLEye }), // Лево - левый глаз
+        new THREE.MeshBasicMaterial({ map: texNose }), // Верх - нос
+        new THREE.MeshBasicMaterial({ map: texMouth }), // Низ - рот
+        new THREE.MeshBasicMaterial({ map: texNose }), // Перед - нос
+        new THREE.MeshBasicMaterial({ map: texLEye })  // Зад - левый глаз
     ];
 
-    // 🔥 ИСПОЛЬЗУЕМ МАССИВ МАТЕРИАЛОВ ВМЕСТО ОДИНОЧНОГО МАТЕРИАЛА
-    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70), materials);
-    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60), materials);
-    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60), materials);
-    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55), materials);
+    // === ИЗМЕНЕНИЕ: Передаем массив материалов (faceMaterials) вместо одного материала ===
+    cube01 = new THREE.Mesh(new THREE.BoxGeometry(70, 90, 70),  faceMaterials);
+    cube02 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  faceMaterials);
+    cube03 = new THREE.Mesh(new THREE.BoxGeometry(60, 60, 60),  faceMaterials);
+    cube04 = new THREE.Mesh(new THREE.BoxGeometry(120,55, 55),  faceMaterials);
 
     [cube01, cube02, cube03, cube04].forEach(c=>{
       c.rotation.set(0,0,0);
@@ -520,7 +518,7 @@
     const vh = video.videoHeight || video.height || 640;
 
     // коэффициент "отдаления":
-    // 1.0 = как было, 1.2 = видно больше лица в кубе
+    // 1.0 = как было, 1.4 = видно больше лица в кубе
     const ZOOM_OUT = 1.2;
 
     // центр бокса
@@ -561,27 +559,14 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // 🔥 ИСПРАВЛЕННЫЙ КОД ДЛЯ ОБНОВЛЕНИЯ ВСЕХ ТЕКСТУР ГРАНЕЙ
-    // Проверяем, является ли material массивом (для 6 граней) или одиночным объектом
-    const materials = Array.isArray(cube01.material) ? cube01.material : [cube01.material];
-
-    // Обновляем карты только один раз, так как все кубы используют одни и те же 4 CanvasTexture,
-    // просто в разном порядке в массиве. Достаточно обновить только те CanvasTexture,
-    // которые были созданы из канвасов (texNose, texLEye, texREye, texMouth).
-   
-    // Мы будем искать уникальные CanvasTexture в массиве материалов:
-    const texturesToUpdate = new Set();
-    materials.forEach(mat => {
-      if (mat && mat.map && mat.map.isCanvasTexture) {
-        texturesToUpdate.add(mat.map);
-      }
-    });
-
-    // Теперь обновляем уникальные текстуры
-    texturesToUpdate.forEach(map => {
-      map.needsUpdate = true;
-    });
-
+    // === ИЗМЕНЕНИЕ: Обновляем текстуры. Так как материал теперь массив,
+    // мы пробегаемся по массиву материалов первого куба (cube01)
+    // и ставим флаг обновления на каждый texture map.
+    if (cube01 && Array.isArray(cube01.material)) {
+        cube01.material.forEach(mat => {
+            if (mat.map) mat.map.needsUpdate = true;
+        });
+    }
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
