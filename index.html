@@ -18,7 +18,6 @@
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <style>
-    /* убираем прокрутку/оверскролл и жесты страницы */
     html, body {
       height:100%;
       margin:0;
@@ -158,7 +157,7 @@
   </div>
 
 <script>
-  // ===== глушим скролл/свайпы страницы (на всякий случай помимо CSS) =====
+  // ===== глушим скролл/свайпы страницы =====
   document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
   document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
 
@@ -182,10 +181,10 @@
   let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
-  // «свои» орбит-контролы (zoom-out по умолчанию)
-  let radius = 600;             // отдаление сцены
-  let azimuth = 0;              // горизонтальный угол
-  let polar = Math.PI/2;        // вертикальный угол
+  // орбит-подобная камера
+  let radius = 600;
+  let azimuth = 0;
+  let polar = Math.PI/2;
   const polarMin = Math.PI/6;
   const polarMax = Math.PI*5/6;
   let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
@@ -240,7 +239,6 @@
     }
   }
 
-  // ===== Кнопка «Продолжить» =====
   $("#button_loader").on("click", async function(){
     $("#permission-screen").fadeOut('slow');
     $("#loading-screen").show();
@@ -262,7 +260,6 @@
 
   // ===== Трекеры =====
   function bootTrackers(){
-    // MediaPipe FaceMesh
     try {
       const fm = new FaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
@@ -284,7 +281,6 @@
       })();
     } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
-    // PoseNet fallback
     try {
       const net = ml5.poseNet(video, () => {});
       net.on('pose', onPoseNetResults);
@@ -341,7 +337,7 @@
     leX   = lerp(leX  ,Lx,.5); leY   = lerp(leY  ,Ly,.5);
     reX   = lerp(reX  ,Rx,.5); reY   = lerp(reY  ,Ry,.5);
 
-    const d = Math.hypot(noseX-leX, noseY-leY) || 120;
+    const d = Math.hypот(noseX-leX, noseY-leY) || 120;
     mX = lerp(mX,noseX,.5); mY = lerp(mY,noseY + d,.5);
 
     const makeBox=(cx,cy,sz)=>({x:cx-sz/2, y:cy-sz/2, w:sz, h:sz});
@@ -354,7 +350,7 @@
     }
   }
 
-  // ===== Three setup (кастомный «орбит» + zoom-out) =====
+  // ===== Three setup =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -383,59 +379,65 @@
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
-    // ===== ТЕКСТУРЫ С КАНВАСОВ =====
+    // === ТЕКСТУРЫ ===
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    // ===== ОДИН МАТЕРИАЛ НА КАЖДУЮ ЧАСТЬ ЛИЦА (ШАРИМСЯ МЕЖДУ ВСЕМИ КУБАМИ) =====
-    const matNose  = new THREE.MeshBasicMaterial({ map: texNose });
-    const matLEye  = new THREE.MeshBasicMaterial({ map: texLEye });
-    const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
-    const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
+    // === МАТЕРИАЛЫ (НЕ ШАРИМ, ЯВНО ДЕЛАЕМ 6 НА КУБ) ===
+    // Порядок граней BoxGeometry: [ +X, -X, +Y, -Y, +Z, -Z ]
 
-    const allMats = [matNose, matLEye, matREye, matMouth];
-
-    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]
-    function facesForCube(frontMat) {
-      const others = allMats.filter(m => m !== frontMat);
-      // чтобы точно было 3 "других", продублируем при необходимости
-      while (others.length < 3) others.push(others[others.length-1] || frontMat);
-
-      return [
-        others[0],          // +X
-        others[1],          // -X
-        others[2],          // +Y
-        others[1],          // -Y
-        frontMat,           // +Z (лицевая грань)
-        others[0]           // -Z
-      ];
-    }
-
-    // ===== КУБЫ С РАЗНЫМИ ЛИЦЕВЫМИ ГРАНЯМИ, НО СТАРЫМИ ФОРМАМИ =====
-    // cube01 — нос
+    // КУБ 1 — Фронт = НОС
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
-      facesForCube(matNose)
+      [
+        new THREE.MeshBasicMaterial({ map: texLEye  }), // +X
+        new THREE.MeshBasicMaterial({ map: texREye  }), // -X
+        new THREE.MeshBasicMaterial({ map: texMouth }), // +Y
+        new THREE.MeshBasicMaterial({ map: texLEye  }), // -Y
+        new THREE.MeshBasicMaterial({ map: texNose  }), // +Z (фронт, НОС)
+        new THREE.MeshBasicMaterial({ map: texMouth })  // -Z
+      ]
     );
 
-    // cube02 — левый глаз
+    // КУБ 2 — Фронт = ЛЕВЫЙ ГЛАЗ
     cube02 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
-      facesForCube(matLEye)
+      [
+        new THREE.MeshBasicMaterial({ map: texNose  }), // +X
+        new THREE.MeshBasicMaterial({ map: texREye  }), // -X
+        new THREE.MeshBasicMaterial({ map: texMouth }), // +Y
+        new THREE.MeshBasicMaterial({ map: texMouth }), // -Y
+        new THREE.MeshBasicMaterial({ map: texLEye  }), // +Z (фронт, ЛЕВЫЙ ГЛАЗ)
+        new THREE.MeshBasicMaterial({ map: texNose  })  // -Z
+      ]
     );
 
-    // cube03 — правый глаз
+    // КУБ 3 — Фронт = ПРАВЫЙ ГЛАЗ
     cube03 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
-      facesForCube(matREye)
+      [
+        new THREE.MeshBasicMaterial({ map: texNose  }), // +X
+        new THREE.MeshBasicMaterial({ map: texLEye  }), // -X
+        new THREE.MeshBasicMaterial({ map: texMouth }), // +Y
+        new THREE.MeshBasicMaterial({ map: texMouth }), // -Y
+        new THREE.MeshBasicMaterial({ map: texREye  }), // +Z (фронт, ПРАВЫЙ ГЛАЗ)
+        new THREE.MeshBasicMaterial({ map: texNose  })  // -Z
+      ]
     );
 
-    // cube04 — рот
+    // КУБ 4 — Фронт = РОТ
     cube04 = new THREE.Mesh(
       new THREE.BoxGeometry(120, 55, 55),
-      facesForCube(matMouth)
+      [
+        new THREE.MeshBasicMaterial({ map: texLEye  }), // +X
+        new THREE.MeshBasicMaterial({ map: texREye  }), // -X
+        new THREE.MeshBasicMaterial({ map: texNose  }), // +Y
+        new THREE.MeshBasicMaterial({ map: texNose  }), // -Y
+        new THREE.MeshBasicMaterial({ map: texMouth }), // +Z (фронт, РОТ)
+        new THREE.MeshBasicMaterial({ map: texLEye  })  // -Z
+      ]
     );
 
     [cube01, cube02, cube03, cube04].forEach(c=>{
@@ -446,7 +448,7 @@
 
     window.addEventListener('resize', onResize);
 
-    // Жесты: перетаскивание — вращение камеры; короткий тап — перемешать
+    // жесты
     document.addEventListener('pointerdown', e=>{
       dragging=true; moved=false; dragStartTime=Date.now();
       lastX=e.clientX; lastY=e.clientY;
@@ -485,7 +487,6 @@
     camera.lookAt(0,0,0);
   }
 
-  // Рандомное положение кубов как в оригинале
   function changePosition(){
     let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
@@ -536,7 +537,7 @@
     changePosition();
   }
 
-  // ===== Рендер/нарезка =====
+  // ===== кроп и рендер =====
   function drawFull(dstCtx, dw, dh){
     try {
       dstCtx.drawImage(
@@ -549,7 +550,6 @@
     } catch(e){}
   }
 
-  // менее зазумленный crop: берём область чуть больше бокса (ZOOM_OUT > 1)
   function drawCrop(dstCtx, b, dw, dh){
     if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
       drawFull(dstCtx, dw, dh);
@@ -559,7 +559,6 @@
     const vw = video.videoWidth || video.width || 480;
     const vh = video.videoHeight || video.height || 640;
 
-    // «отдаляем» чуть-чуть: видно больше лица
     const ZOOM_OUT = 1.2;
 
     const cx = b.x + b.w / 2;
@@ -597,7 +596,7 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // обновляем текстуры, учитывая массив материалов
+    // обновляем текстуры (учитываем массив материалов)
     [cube01, cube02, cube03, cube04].forEach(cube => {
       if (cube && cube.material) {
         if (Array.isArray(cube.material)) {
