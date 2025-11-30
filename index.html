@@ -107,19 +107,11 @@
     }
 
     .loader-logo {
-      width:72px;
-      height:72px;
+      width:82px;
+      height:82px;
       object-fit:contain;
+      image-rendering:auto;
       filter:drop-shadow(0 0 16px rgba(255,255,255,.2));
-    }
-
-    .loader-spinner {
-      width:32px;
-      height:32px;
-      border-radius:50%;
-      border:3px solid rgba(255,255,255,.18);
-      border-top-color:#fff;
-      animation: spin 0.9s linear infinite;
     }
 
     .loader-text-main {
@@ -129,10 +121,6 @@
     .loader-text-sub {
       font-size:12px;
       opacity:.7;
-    }
-
-    @keyframes spin {
-      to { transform:rotate(360deg); }
     }
 
     video {
@@ -152,9 +140,8 @@
   <!-- БРЕНД-ЛОАДЕР -->
   <div id="loading-screen" class="wrapper">
     <div class="loader-card">
-      <!-- Положи рядом с index.html файл logo.svg или поменяй src -->
-      <img id="loading_logo" src="logo.svg" alt="Логотип" class="loader-logo" />
-      <div class="loader-spinner"></div>
+      <!-- GIF с крутящейся буквой, файл loader-spin.gif -->
+      <img id="loading_logo" src="loader-spin.gif" alt="Логотип" class="loader-logo" />
       <div class="loader-text-main">Готовим кубы…</div>
       <div class="loader-text-sub">Подключаем камеру и трекаем лицо</div>
     </div>
@@ -179,7 +166,7 @@
   <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
   <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
   <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- левый глаз -->
-  <!-- КАНВАС ДЛЯ БРЕНД-КУБА -->
+  <!-- КАНВАС ДЛЯ БРЕНД-КУБА (сейчас не обязателен, но оставим) -->
   <canvas id="infoCanvas" width="512" height="512" style="display:none"></canvas>
 
   <!-- Скрытое видео -->
@@ -231,7 +218,6 @@
   let camera, orthoCamera, activeCamera;
   let cube01, cube02, cube03, cube04, cube05;
   const FIXED_Z = 0;
-  let texInfo;
 
   // кастомный орбит
   let radius = 600;
@@ -407,7 +393,7 @@
     }
   }
 
-  // ===== рисуем текстуру для бренд-куба =====
+  // ===== рисуем текстуру для бренд-куба (больше не используем, но пусть будет) =====
   function drawInfoTexture(){
     const w = info_canvas.width;
     const h = info_canvas.height;
@@ -473,7 +459,7 @@
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // кубы лица (разные грани)
+    // кубы лица
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
       [
@@ -528,23 +514,17 @@
       scene.add(c);
     });
 
-    // ==== ПЯТЫЙ БРЕНД-КУБ (ТОЧНО ВИДЕН) ====
-    drawInfoTexture();
-    texInfo = new THREE.CanvasTexture(info_canvas);
-    texInfo.needsUpdate = true;
-
-    const matInfo = new THREE.MeshBasicMaterial({
-      map: texInfo,
-      transparent: false
-    });
+    // ==== ПЯТЫЙ БРЕНД-КУБ С PNG-ТЕКСТУРОЙ ====
+    const brandTex = new THREE.TextureLoader().load("brand-cube.png");
+    brandTex.minFilter = THREE.LinearFilter;
+    brandTex.magFilter = THREE.LinearFilter;
 
     cube05 = new THREE.Mesh(
-      new THREE.BoxGeometry(130,130,130),
-      [
-        matInfo, matInfo, matInfo, matInfo, matInfo, matInfo
-      ]
+      new THREE.BoxGeometry(90, 90, 90),
+      new THREE.MeshBasicMaterial({ map: brandTex })
     );
-    cube05.position.set(0, 0, 140); // вынесен вперёд
+    cube05.position.set(0, 0, 95); // чуть вперед по Z
+    cube05.rotation.set(0, 0, 0);
     scene.add(cube05);
 
     window.addEventListener('resize', onResize);
@@ -589,31 +569,50 @@
 
   // рандом всех 5 кубов, бренд-куб — всегда чуть впереди
   function changePosition(){
-    if (!cube01 || !cube02 || !cube03 || !cube04 || !cube05) return;
-
     const cubes = [cube01, cube02, cube03, cube04, cube05];
-    const F = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    if (!cubes.every(Boolean)) return;
+
+    // разные диапазоны разлёта для каждого куба
+    const ranges = [
+      { x: [-140, 140], y: [-80, 160] },   // cube01
+      { x: [-180, 180], y: [-160, 160] },  // cube02
+      { x: [-180, 180], y: [-160, 160] },  // cube03
+      { x: [-150, 150], y: [-180, 180] },  // cube04
+      { x: [-120, 120], y: [-200, 200] }   // cube05 (бренд)
+    ];
+
+    const minDistance = 120; // минимальное расстояние между центрами
 
     let ok = false;
     let guard = 0;
-    while(!ok && guard < 200) {
+
+    while (!ok && guard < 300) {
       guard++;
 
-      cubes.forEach(c=>{
-        c.rotation.y = rand(0.1,0.5);
+      cubes.forEach((cube, index) => {
+        const r = ranges[index];
+        cube.position.x = rand(r.x[0], r.x[1]);
+        cube.position.y = rand(r.y[0], r.y[1]);
+        cube.position.z = index === 4 ? 95 : 0; // бренд всегда спереди
+
+        cube.rotation.set(
+          rand(0, 0.3),
+          rand(0, 0.3),
+          rand(0, 0.3)
+        );
       });
 
-      cube01.position.set(rand(-55,55),  rand(-140,140), 0);
-      cube02.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube03.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube04.position.set(rand(-45,45),  rand(-155,155), 0);
-      cube05.position.set(rand(-70,70),  rand(-190,190), 140); // всегда впереди по Z
-
+      // проверяем расстояния
       ok = true;
-      for (let i=0;i<cubes.length;i++){
-        for (let j=i+1;j<cubes.length;j++){
-          const d = F(cubes[i].position, cubes[j].position);
-          if (d < 100) { ok = false; break; }
+      for (let i = 0; i < cubes.length; i++) {
+        for (let j = i + 1; j < cubes.length; j++) {
+          const dx = cubes[i].position.x - cubes[j].position.x;
+          const dy = cubes[i].position.y - cubes[j].position.y;
+          const d = Math.hypot(dx, dy);
+          if (d < minDistance) {
+            ok = false;
+            break;
+          }
         }
         if (!ok) break;
       }
@@ -706,8 +705,8 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // обновляем текстуры
-    [cube01, cube02, cube03, cube04, cube05].forEach(cube => {
+    // обновляем только канвас-текстуры (кубы 1-4)
+    [cube01, cube02, cube03, cube04].forEach(cube => {
       if (cube && cube.material) {
         if (Array.isArray(cube.material)) {
           cube.material.forEach(mat => {
@@ -718,10 +717,6 @@
         }
       }
     });
-
-    if (cube05) {
-      cube05.rotation.y += 0.004;
-    }
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
