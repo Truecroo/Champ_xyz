@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Куб-селфи</title>
+  <title>БЛЭСТ-селфи</title>
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
   <!-- jQuery -->
@@ -178,13 +178,13 @@
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
+  <div id="discription">Тап — перемешать кубы \ Свайп — менять угол камеры</div>
 
   <div id="about">
     <div id="aboutText">
-      <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
+      <p class="explain"><b>БЛЭСТ СЭЛФИ</b> — Собираемся, чтобы найти твой лучший ракурс.</p>
       <p class="credits">
-        Технологии:
+        Created by БЛЭСТ СТАФФ с помощью:
         <a href="https://threejs.org/">Three.js</a>,
         <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>,
         <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
@@ -587,14 +587,14 @@
 
       // левый глаз — сверху слева
       cube02.position.set(
-        rand(-90,-20),
+        rand(90,20),
         rand(40,120),
         0
       );
 
       // правый глаз — сверху справа
       cube03.position.set(
-        rand(20,90),
+        rand(-20,-90),
         rand(40,120),
         0
       );
