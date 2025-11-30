@@ -295,24 +295,33 @@
   }
 
   // ===== Кнопка «Продолжить» =====
-  $("#button_loader").on("click", async function(){
-    $("#permission-screen").fadeOut('slow');
-    $("#loading-screen").style.display = 'flex';
+$("#button_loader").on("click", async function(){
+  $("#permission-screen").fadeOut('slow');
+  // показываем лоадер через jQuery
+  $("#loading-screen").css('display', 'flex');
 
-    const ok = await askCamera();
-    if (!ok) { $("#loading-screen").style.display = 'none'; $("#permission-screen").show(); return; }
+  const ok = await askCamera();
+  if (!ok) {
+    $("#loading-screen").css('display', 'none');
+    $("#permission-screen").show();
+    return;
+  }
 
-    $("#container").fadeIn('slow');
-    $("#download_div").fadeIn('slow');
-    $("#aboutButton").fadeIn('slow');
+  $("#container").fadeIn('slow');
+  $("#download_div").fadeIn('slow');
+  $("#aboutButton").fadeIn('slow');
 
-    initThree();
-    bootTrackers();
-    changePosition();
-    animate();
+  initThree();
+  bootTrackers();
+  changePosition();
+  animate();
 
-    setTimeout(()=>$("#loading-screen").style.display = 'none', 1600);
-  });
+  // прячем лоадер
+  setTimeout(() => {
+    $("#loading-screen").css('display', 'none');
+  }, 1600);
+});
+
 
   // ===== Трекеры =====
   function bootTrackers(){
