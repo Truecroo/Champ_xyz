@@ -18,7 +18,6 @@
   <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
   <style>
-    /* убираем прокрутку/оверскролл и жесты страницы */
     html, body {
       height:100%;
       margin:0;
@@ -85,6 +84,7 @@
       font-size:13px;
     }
 
+    /* БРЕНДИРОВАННЫЙ ЛОАДЕР */
     #loading-screen {
       position:fixed; inset:0;
       display:none;
@@ -92,9 +92,47 @@
       background:#000; z-index:9;
     }
 
-    #loading_gif {
-      width:120px; height:120px;
-      opacity:.8;
+    .loader-card {
+      padding:20px 24px;
+      border-radius:18px;
+      border:1px solid #2a2a2a;
+      background:radial-gradient(circle at top, #171717 0, #050505 55%, #000 100%);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:12px;
+      min-width:220px;
+      max-width:260px;
+      text-align:center;
+    }
+
+    .loader-logo {
+      width:72px;
+      height:72px;
+      object-fit:contain;
+      filter:drop-shadow(0 0 16px rgba(255,255,255,.2));
+    }
+
+    .loader-spinner {
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      border:3px solid rgba(255,255,255,.18);
+      border-top-color:#fff;
+      animation: spin 0.9s linear infinite;
+    }
+
+    .loader-text-main {
+      font-size:14px;
+      font-weight:600;
+    }
+    .loader-text-sub {
+      font-size:12px;
+      opacity:.7;
+    }
+
+    @keyframes spin {
+      to { transform:rotate(360deg); }
     }
 
     video {
@@ -111,8 +149,15 @@
 
 <body>
 
+  <!-- БРЕНД-ЛОАДЕР -->
   <div id="loading-screen" class="wrapper">
-    <img id="loading_gif" src="Loading_G.gif" alt="Загрузка…" />
+    <div class="loader-card">
+      <!-- Положи рядом с index.html файл logo.svg и пропиши путь -->
+      <img id="loading_logo" src="logo.svg" alt="Логотип" class="loader-logo" />
+      <div class="loader-spinner"></div>
+      <div class="loader-text-main">Готовим кубы…</div>
+      <div class="loader-text-sub">Подключаем камеру и трекаем лицо</div>
+    </div>
   </div>
 
   <section id="permission-screen">
@@ -134,6 +179,8 @@
   <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
   <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
   <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- левый глаз -->
+  <!-- КАНВАС ДЛЯ ИНФО-БЛОКА В СЦЕНЕ -->
+  <canvas id="infoCanvas" width="512" height="256" style="display:none"></canvas>
 
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
@@ -158,7 +205,7 @@
   </div>
 
 <script>
-  // ===== глушим скролл/свайпы страницы (на всякий случай помимо CSS) =====
+  // ===== глушим скролл/свайпы страницы =====
   document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
   document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
 
@@ -173,6 +220,10 @@
   const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
   const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
 
+  // канвас для инфо-блока в сцене
+  const info_canvas = document.getElementById("infoCanvas");
+  const ctxInfo = info_canvas.getContext("2d");
+
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const rand=(a,b)=>Math.random()*(b-a)+a;
 
@@ -182,10 +233,13 @@
   let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
+  // инфо-плашка в 3D
+  let infoMesh, texInfo;
+
   // «свои» орбит-контролы (zoom-out по умолчанию)
-  let radius = 600;             // отдаление сцены
-  let azimuth = 0;              // горизонтальный угол
-  let polar = Math.PI/2;        // вертикальный угол
+  let radius = 600;
+  let azimuth = 0;
+  let polar = Math.PI/2;
   const polarMin = Math.PI/6;
   const polarMax = Math.PI*5/6;
   let dragging = false, lastX=0, lastY=0, dragStartTime=0, moved=false;
@@ -243,10 +297,10 @@
   // ===== Кнопка «Продолжить» =====
   $("#button_loader").on("click", async function(){
     $("#permission-screen").fadeOut('slow');
-    $("#loading-screen").show();
+    $("#loading-screen").style.display = 'flex';
 
     const ok = await askCamera();
-    if (!ok) { $("#loading-screen").hide(); $("#permission-screen").show(); return; }
+    if (!ok) { $("#loading-screen").style.display = 'none'; $("#permission-screen").show(); return; }
 
     $("#container").fadeIn('slow');
     $("#download_div").fadeIn('slow');
@@ -257,12 +311,11 @@
     changePosition();
     animate();
 
-    setTimeout(()=>$("#loading-screen").fadeOut('fast'), 2000);
+    setTimeout(()=>$("#loading-screen").style.display = 'none', 1600);
   });
 
   // ===== Трекеры =====
   function bootTrackers(){
-    // MediaPipe FaceMesh
     try {
       const fm = new FaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
@@ -284,7 +337,6 @@
       })();
     } catch(e) { console.warn('FaceMesh не запустился:', e); }
 
-    // PoseNet fallback
     try {
       const net = ml5.poseNet(video, () => {});
       net.on('pose', onPoseNetResults);
@@ -354,6 +406,35 @@
     }
   }
 
+  // ===== рисуем инфо-текстуру для плашки в сцене =====
+  function drawInfoTexture(){
+    const w = info_canvas.width;
+    const h = info_canvas.height;
+    ctxInfo.clearRect(0,0,w,h);
+
+    // фон
+    const grd = ctxInfo.createLinearGradient(0,0,w,h);
+    grd.addColorStop(0,"rgba(10,10,10,0.9)");
+    grd.addColorStop(1,"rgba(5,5,5,0.6)");
+    ctxInfo.fillStyle = grd;
+    ctxInfo.fillRect(0,0,w,h);
+
+    // рамка
+    ctxInfo.strokeStyle = "rgba(255,255,255,0.25)";
+    ctxInfo.lineWidth = 4;
+    ctxInfo.strokeRect(10,10,w-20,h-20);
+
+    ctxInfo.fillStyle = "#ffffff";
+    ctxInfo.font = "bold 42px system-ui";
+    ctxInfo.textAlign = "center";
+
+    ctxInfo.fillText("Selfie Cubes", w/2, h/2 - 10);
+
+    ctxInfo.font = "26px system-ui";
+    ctxInfo.fillStyle = "rgba(255,255,255,0.75)";
+    ctxInfo.fillText("by True Croo", w/2, h/2 + 26);
+  }
+
   // ===== Three setup (кастомный «орбит» + zoom-out) =====
   function initThree(){
     scene = new THREE.Scene();
@@ -389,14 +470,12 @@
     const texREye  = new THREE.CanvasTexture(right_canvas);
     const texMouth = new THREE.CanvasTexture(mouth_canvas);
 
-    // ===== ОТДЕЛЬНЫЕ МАТЕРИАЛЫ НА КАЖДУЮ ЧАСТЬ ЛИЦА =====
     const matNose  = new THREE.MeshBasicMaterial({ map: texNose });
     const matLEye  = new THREE.MeshBasicMaterial({ map: texLEye });
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // Порядок граней BoxGeometry: [ +X, -X, +Y, -Y, +Z, -Z ]
-    // cube01 — фронт = НОС
+    // КУБЫ с разными гранями
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
       [
@@ -404,12 +483,11 @@
         matREye,   // -X
         matMouth,  // +Y
         matNose,   // -Y
-        matNose,   // +Z (фронт — нос)
+        matNose,   // +Z
         matMouth   // -Z
       ]
     );
 
-    // cube02 — фронт = ЛЕВЫЙ ГЛАЗ
     cube02 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
@@ -417,12 +495,11 @@
         matMouth,  // -X
         matREye,   // +Y
         matLEye,   // -Y
-        matLEye,   // +Z (фронт — левый глаз)
+        matLEye,   // +Z
         matNose    // -Z
       ]
     );
 
-    // cube03 — фронт = ПРАВЫЙ ГЛАЗ
     cube03 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
@@ -430,12 +507,11 @@
         matLEye,   // -X
         matNose,   // +Y
         matREye,   // -Y
-        matREye,   // +Z (фронт — правый глаз)
+        matREye,   // +Z
         matMouth   // -Z
       ]
     );
 
-    // cube04 — фронт = РОТ
     cube04 = new THREE.Mesh(
       new THREE.BoxGeometry(120, 55, 55),
       [
@@ -443,7 +519,7 @@
         matNose,   // -X
         matLEye,   // +Y
         matMouth,  // -Y
-        matMouth,  // +Z (фронт — рот)
+        matMouth,  // +Z
         matLEye    // -Z
       ]
     );
@@ -454,9 +530,20 @@
       scene.add(c);
     });
 
+    // ===== ИНФО-БЛОК В СЦЕНЕ =====
+    drawInfoTexture();
+    texInfo = new THREE.CanvasTexture(info_canvas);
+    const matInfo = new THREE.MeshBasicMaterial({
+      map: texInfo,
+      transparent: true
+    });
+    const geoInfo = new THREE.PlaneGeometry(220, 110);
+    infoMesh = new THREE.Mesh(geoInfo, matInfo);
+    infoMesh.position.set(0, -220, -20);
+    scene.add(infoMesh);
+
     window.addEventListener('resize', onResize);
 
-    // Жесты: перетаскивание — вращение камеры; короткий тап — перемешать
     document.addEventListener('pointerdown', e=>{
       dragging=true; moved=false; dragStartTime=Date.now();
       lastX=e.clientX; lastY=e.clientY;
@@ -495,7 +582,6 @@
     camera.lookAt(0,0,0);
   }
 
-  // Рандомное положение кубов как в оригинале
   function changePosition(){
     let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
@@ -559,7 +645,6 @@
     } catch(e){}
   }
 
-  // менее зазумленный crop: берём область чуть больше бокса (ZOOM_OUT > 1)
   function drawCrop(dstCtx, b, dw, dh){
     if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
       drawFull(dstCtx, dw, dh);
@@ -569,7 +654,6 @@
     const vw = video.videoWidth || video.width || 480;
     const vh = video.videoHeight || video.height || 640;
 
-    // «отдаляем» чуть-чуть: видно больше лица
     const ZOOM_OUT = 1.2;
 
     const cx = b.x + b.w / 2;
@@ -607,7 +691,6 @@
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    // обновляем текстуры, учитывая массив материалов
     [cube01, cube02, cube03, cube04].forEach(cube => {
       if (cube && cube.material) {
         if (Array.isArray(cube.material)) {
@@ -619,6 +702,12 @@
         }
       }
     });
+
+    // слегка крутим инфо-плашку для жизни
+    if (infoMesh) {
+      infoMesh.rotation.y += 0.003;
+      if (texInfo) texInfo.needsUpdate = false; // текст статичный
+    }
 
     activeCamera.lookAt(0,0,0);
     renderer.render(scene, activeCamera);
