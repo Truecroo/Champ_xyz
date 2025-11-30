@@ -166,7 +166,7 @@
   <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
   <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
   <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- левый глаз -->
-  <!-- КАНВАС ДЛЯ БРЕНД-КУБА (сейчас не обязателен, но оставим) -->
+  <!-- КАНВАС ДЛЯ БРЕНД-КУБА (не обязателен, но пусть будет) -->
   <canvas id="infoCanvas" width="512" height="512" style="display:none"></canvas>
 
   <!-- Скрытое видео -->
@@ -220,7 +220,7 @@
   const FIXED_Z = 0;
 
   // кастомный орбит
-  let radius = 600;
+  let radius = 720;          // чуть дальше камера
   let azimuth = 0;
   let polar = Math.PI/2;
   const polarMin = Math.PI/6;
@@ -393,7 +393,7 @@
     }
   }
 
-  // ===== рисуем текстуру для бренд-куба (больше не используем, но пусть будет) =====
+  // ===== рисуем текстуру для бренд-куба (запасная) =====
   function drawInfoTexture(){
     const w = info_canvas.width;
     const h = info_canvas.height;
@@ -567,21 +567,21 @@
     camera.lookAt(0,0,0);
   }
 
-  // рандом всех 5 кубов, бренд-куб — всегда чуть впереди
+  // более центрированная рандомизация всех 5 кубов
   function changePosition(){
     const cubes = [cube01, cube02, cube03, cube04, cube05];
     if (!cubes.every(Boolean)) return;
 
-    // разные диапазоны разлёта для каждого куба
+    // компактные диапазоны вокруг центра
     const ranges = [
-      { x: [-140, 140], y: [-80, 160] },   // cube01
-      { x: [-180, 180], y: [-160, 160] },  // cube02
-      { x: [-180, 180], y: [-160, 160] },  // cube03
-      { x: [-150, 150], y: [-180, 180] },  // cube04
-      { x: [-120, 120], y: [-200, 200] }   // cube05 (бренд)
+      { x: [-90,  90],  y: [-60, 110] },   // cube01
+      { x: [-110, 110], y: [-80, 120] },   // cube02
+      { x: [-110, 110], y: [-80, 120] },   // cube03
+      { x: [-100, 100], y: [-100, 130] },  // cube04
+      { x: [-80,  80],  y: [-120, 140] }   // cube05 (бренд)
     ];
 
-    const minDistance = 120; // минимальное расстояние между центрами
+    const minDistance = 100; // минимальное расстояние между центрами
 
     let ok = false;
     let guard = 0;
