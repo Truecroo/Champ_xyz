@@ -84,7 +84,7 @@
       font-size:13px;
     }
 
-    /* Лоадер оставляем в DOM, но нигде не используем (только для будущего рендера) */
+    /* Бренд-лоадер */
     #loading-screen {
       position:fixed; inset:0;
       display:none;
@@ -117,7 +117,7 @@
       opacity:.8;
     }
 
-    /* Статичный бренд-PNG в углу */
+    /* Статичный бренд-PNG — по умолчанию скрыт (чтобы не торчал на первом экране/лоадере) */
     #brandBadge {
       position:fixed;
       right:12px;
@@ -126,6 +126,7 @@
       height:auto;
       z-index:15;
       pointer-events:none;
+      display:none;
     }
 
     video {
@@ -142,7 +143,7 @@
 
 <body>
 
-  <!-- Лоадер (сейчас не показывается) -->
+  <!-- БРЕНД-ЛОАДЕР -->
   <div id="loading-screen" class="wrapper">
     <div class="loader-card">
       <img id="loading_logo" src="Loading_G.gif" alt="Загрузка…" class="loader-logo" />
@@ -151,7 +152,7 @@
     </div>
   </div>
 
-  <!-- Статичный PNG-логотип / инфа -->
+  <!-- Статичный PNG-логотип / инфа (покажем только с 3D-сценой) -->
   <img id="brandBadge" src="brand-cube.png" alt="Куб-селфи" />
 
   <section id="permission-screen">
@@ -220,12 +221,12 @@
   // ===== Three.js =====
   let scene, renderer;
   let camera, orthoCamera, activeCamera;
-  let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
+  let cube01, cube02, cube03, cube04;
   const FIXED_Z = 0;
 
-  // кастомный орбит (камера стартует по оси Z, смотрим "в лоб")
+  // кастомный орбит — как было, но стартуем на оси Z
   let radius = 600;
-  let azimuth = 0;
+  let azimuth = Math.PI / 2;   // чтобы изначально смотреть с +Z
   let polar = Math.PI/2;
   const polarMin = Math.PI/6;
   const polarMax = Math.PI*5/6;
@@ -307,12 +308,14 @@
     }
   }
 
-  // ===== Кнопка «Продолжить» =====
+  // ===== Кнопка «Продолжить» + ЛОАДЕР =====
   $("#button_loader").on("click", async function(){
     $("#permission-screen").fadeOut('slow');
+    $("#loading-screen").css('display','flex');
 
     const ok = await askCamera();
     if (!ok) {
+      $("#loading-screen").css('display','none');
       $("#permission-screen").show();
       return;
     }
@@ -320,11 +323,14 @@
     $("#container").fadeIn('slow');
     $("#download_div").fadeIn('slow');
     $("#aboutButton").fadeIn('slow');
+    $("#brandBadge").fadeIn('slow');  // показываем бренд только вместе со сценой
 
     initThree();
     bootTrackers();
     changePosition();
     animate();
+
+    setTimeout(()=>$("#loading-screen").fadeOut('fast'), 1600);
   });
 
   // ===== Трекеры =====
@@ -458,7 +464,9 @@
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]; фронт при камере по Z = -Z (index 5)
+    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]
+    // фронт при старте — +Z (index 4), камера на +Z, смотрит в центр
+
     // cube01 — фронт: НОС
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
@@ -467,8 +475,8 @@
         matREye,   // -X
         matMouth,  // +Y
         matMouth,  // -Y
-        matLEye,   // +Z
-        matNose    // -Z (фронт)
+        matNose,   // +Z фронт
+        matLEye    // -Z
       ]
     );
 
@@ -476,12 +484,12 @@
     cube02 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
-        matNose,
-        matMouth,
-        matREye,
-        matNose,
-        matMouth,
-        matLEye   // фронт
+        matNose,   // +X
+        matMouth,  // -X
+        matREye,   // +Y
+        matNose,   // -Y
+        matLEye,   // +Z фронт
+        matMouth   // -Z
       ]
     );
 
@@ -489,12 +497,12 @@
     cube03 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
-        matMouth,
-        matNose,
-        matLEye,
-        matMouth,
-        matNose,
-        matREye   // фронт
+        matMouth,  // +X
+        matNose,   // -X
+        matLEye,   // +Y
+        matMouth,  // -Y
+        matREye,   // +Z фронт
+        matNose    // -Z
       ]
     );
 
@@ -502,12 +510,12 @@
     cube04 = new THREE.Mesh(
       new THREE.BoxGeometry(120, 55, 55),
       [
-        matREye,
-        matLEye,
-        matNose,
-        matNose,
-        matLEye,
-        matMouth  // фронт
+        matREye,   // +X
+        matLEye,   // -X
+        matNose,   // +Y
+        matNose,   // -Y
+        matMouth,  // +Z фронт
+        matLEye    // -Z
       ]
     );
 
@@ -547,15 +555,14 @@
     }, {passive:true});
   }
 
-  // камера вокруг оси Y, стартуем на оси Z (в лоб)
+  // Старая формула камеры (как тебе нравилось),
+  // но с azimuth = PI/2 она стартует с оси +Z
   function updateCameraFromSpherical(){
     const sinP = Math.sin(polar), cosP = Math.cos(polar);
     const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
-
-    const x = radius * sinP * sinA;
+    const x = radius * sinP * cosA;
     const y = radius * cosP;
-    const z = radius * sinP * cosA;
-
+    const z = radius * sinP * sinA;
     if (camera) {
       camera.position.set(x,y,z);
       camera.lookAt(0,0,0);
@@ -573,8 +580,8 @@
 
       // нос — центр
       cube01.position.set(
-        rand(-40,40),   // x
-        rand(-20,40),   // y
+        rand(-40,40),
+        rand(-20,40),
         0
       );
 
