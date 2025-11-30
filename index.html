@@ -514,10 +514,11 @@
 
     const F = (a,b) => Math.hypot(a.x - b.x, a.y - b.y);
     const MIN_D = 100;
-    let ok = false;
+
+    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0,d7=0,d8=0,d9=0,d10=0;
     let guard = 0;
 
-    do {
+    do{
       guard++;
 
       // лёгкие повороты
@@ -536,19 +537,25 @@
       // бренд-куб: чуть шире и выше, спереди по Z
       cube05.position.set(rand(-70,70),  rand(-190,190), 140);
 
-      const cubes = [cube01, cube02, cube03, cube04, cube05];
-      ok = true;
+      // расстояния между первыми четырьмя (как было)
+      d1=F(cube01.position,cube02.position);
+      d2=F(cube02.position,cube03.position);
+      d3=F(cube01.position,cube03.position);
+      d4=F(cube03.position,cube04.position);
+      d5=F(cube02.position,cube04.position);
+      d6=F(cube01.position,cube04.position);
 
-      for (let i = 0; i < cubes.length; i++) {
-        for (let j = i + 1; j < cubes.length; j++) {
-          if (F(cubes[i].position, cubes[j].position) < MIN_D) {
-            ok = false;
-            break;
-          }
-        }
-        if (!ok) break;
-      }
-    } while (!ok && guard < 200);
+      // расстояния бренд-куба до остальных
+      d7 =F(cube05.position,cube01.position);
+      d8 =F(cube05.position,cube02.position);
+      d9 =F(cube05.position,cube03.position);
+      d10=F(cube05.position,cube04.position);
+
+    } while (
+      (d1<MIN_D || d2<MIN_D || d3<MIN_D || d4<MIN_D || d5<MIN_D || d6<MIN_D ||
+       d7<MIN_D || d8<MIN_D || d9<MIN_D || d10<MIN_D)
+      && guard < 200
+    );
   }
 
   function onResize(){
@@ -579,4 +586,82 @@
   }
 
   // ===== Рендер/нарезка =====
-  function drawFull(dstCtx,
+  function drawFull(dstCtx, dw, dh){
+    try {
+      dstCtx.drawImage(
+        video,
+        0, 0,
+        video.videoWidth || dw,
+        video.videoHeight || dh,
+        0, 0, dw, dh
+      );
+    } catch(e){}
+  }
+
+  // менее зазумленный crop: берём область чуть больше бокса (ZOOM_OUT > 1)
+  function drawCrop(dstCtx, b, dw, dh){
+    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
+      drawFull(dstCtx, dw, dh);
+      return;
+    }
+
+    const vw = video.videoWidth || video.width || 480;
+    const vh = video.videoHeight || video.height || 640;
+
+    // «отдаляем» чуть-чуть: видно больше лица
+    const ZOOM_OUT = 1.2;
+
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+
+    let sw = b.w * ZOOM_OUT;
+    let sh = b.h * ZOOM_OUT;
+
+    let sx = cx - sw / 2;
+    let sy = cy - sh / 2;
+
+    sx = clamp(sx, 0, vw - 1);
+    sy = clamp(sy, 0, vh - 1);
+    sw = clamp(sw, 1, vw - sx);
+    sh = clamp(sh, 1, vh - sy);
+
+    try {
+      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+    } catch(e){}
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+
+    const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
+    if (hasLM) {
+      drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
+      drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);
+      drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);
+      drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height);
+    } else {
+      drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
+      drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
+      drawFull(ctxREye,  right_canvas.width, right_canvas.height);
+      drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
+    }
+
+    // обновляем текстуры, учитывая массив материалов (1–4 кубы)
+    [cube01, cube02, cube03, cube04].forEach(cube => {
+      if (cube && cube.material) {
+        if (Array.isArray(cube.material)) {
+          cube.material.forEach(mat => {
+            if (mat.map) mat.map.needsUpdate = true;
+          });
+        } else if (cube.material.map) {
+          cube.material.map.needsUpdate = true;
+        }
+      }
+    });
+
+    activeCamera.lookAt(0,0,0);
+    renderer.render(scene, activeCamera);
+  }
+</script>
+</body>
+</html>
