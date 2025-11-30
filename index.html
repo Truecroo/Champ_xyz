@@ -152,7 +152,7 @@
   <!-- БРЕНД-ЛОАДЕР -->
   <div id="loading-screen" class="wrapper">
     <div class="loader-card">
-      <!-- Положи рядом с index.html файл logo.svg и пропиши путь -->
+      <!-- Положи рядом с index.html файл logo.svg или поправь src -->
       <img id="loading_logo" src="logo.svg" alt="Логотип" class="loader-logo" />
       <div class="loader-spinner"></div>
       <div class="loader-text-main">Готовим кубы…</div>
@@ -179,8 +179,8 @@
   <canvas id="canvas01" width="512" height="512" style="display:none"></canvas>  <!-- правый глаз -->
   <canvas id="canvas02" width="512" height="256" style="display:none"></canvas>  <!-- рот -->
   <canvas id="Mycanvas" width="512" height="512" style="display:none"></canvas>  <!-- левый глаз -->
-  <!-- КАНВАС ДЛЯ ИНФО-БЛОКА В СЦЕНЕ -->
-  <canvas id="infoCanvas" width="512" height="256" style="display:none"></canvas>
+  <!-- КАНВАС ДЛЯ БРЕНД-КУБА -->
+  <canvas id="infoCanvas" width="512" height="512" style="display:none"></canvas>
 
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
@@ -220,7 +220,7 @@
   const right_canvas = document.getElementById("canvas01"); const ctxREye  = right_canvas.getContext("2d");
   const mouth_canvas = document.getElementById("canvas02"); const ctxMouth = mouth_canvas.getContext("2d");
 
-  // канвас для инфо-блока в сцене
+  // канвас для бренд-куба
   const info_canvas = document.getElementById("infoCanvas");
   const ctxInfo = info_canvas.getContext("2d");
 
@@ -230,13 +230,13 @@
   // ===== Three.js =====
   let scene, renderer;
   let camera, orthoCamera, activeCamera;
-  let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
+  // 4 куба лица + 5-й бренд-куб
+  let cube01, cube02, cube03, cube04, cube05;
   const FIXED_Z = 0;
 
-  // инфо-плашка в 3D
-  let infoMesh, texInfo;
+  let texInfo;
 
-  // «свои» орбит-контролы (zoom-out по умолчанию)
+  // «свои» орбит-контролы
   let radius = 600;
   let azimuth = 0;
   let polar = Math.PI/2;
@@ -294,34 +294,29 @@
     }
   }
 
-  // ===== Кнопка «Продолжить» =====
-$("#button_loader").on("click", async function(){
-  $("#permission-screen").fadeOut('slow');
-  // показываем лоадер через jQuery
-  $("#loading-screen").css('display', 'flex');
+  // ===== Кнопка «Продолжить» (с фиксом jQuery) =====
+  $("#button_loader").on("click", async function(){
+    $("#permission-screen").fadeOut('slow');
+    $("#loading-screen").css('display', 'flex');
 
-  const ok = await askCamera();
-  if (!ok) {
-    $("#loading-screen").css('display', 'none');
-    $("#permission-screen").show();
-    return;
-  }
+    const ok = await askCamera();
+    if (!ok) {
+      $("#loading-screen").css('display', 'none');
+      $("#permission-screen").show();
+      return;
+    }
 
-  $("#container").fadeIn('slow');
-  $("#download_div").fadeIn('slow');
-  $("#aboutButton").fadeIn('slow');
+    $("#container").fadeIn('slow');
+    $("#download_div").fadeIn('slow');
+    $("#aboutButton").fadeIn('slow');
 
-  initThree();
-  bootTrackers();
-  changePosition();
-  animate();
+    initThree();
+    bootTrackers();
+    changePosition();
+    animate();
 
-  // прячем лоадер
-  setTimeout(() => {
-    $("#loading-screen").css('display', 'none');
-  }, 1600);
-});
-
+    setTimeout(()=>$("#loading-screen").css('display', 'none'), 1600);
+  });
 
   // ===== Трекеры =====
   function bootTrackers(){
@@ -415,36 +410,34 @@ $("#button_loader").on("click", async function(){
     }
   }
 
-  // ===== рисуем инфо-текстуру для плашки в сцене =====
+  // ===== рисуем текстуру для бренд-куба =====
   function drawInfoTexture(){
     const w = info_canvas.width;
     const h = info_canvas.height;
     ctxInfo.clearRect(0,0,w,h);
 
-    // фон
     const grd = ctxInfo.createLinearGradient(0,0,w,h);
-    grd.addColorStop(0,"rgba(10,10,10,0.9)");
-    grd.addColorStop(1,"rgba(5,5,5,0.6)");
+    grd.addColorStop(0,"rgba(10,10,10,0.95)");
+    grd.addColorStop(1,"rgba(5,5,5,0.7)");
     ctxInfo.fillStyle = grd;
     ctxInfo.fillRect(0,0,w,h);
 
-    // рамка
     ctxInfo.strokeStyle = "rgba(255,255,255,0.25)";
-    ctxInfo.lineWidth = 4;
-    ctxInfo.strokeRect(10,10,w-20,h-20);
+    ctxInfo.lineWidth = 8;
+    ctxInfo.strokeRect(20,20,w-40,h-40);
 
     ctxInfo.fillStyle = "#ffffff";
-    ctxInfo.font = "bold 42px system-ui";
+    ctxInfo.font = "bold 52px system-ui";
     ctxInfo.textAlign = "center";
 
     ctxInfo.fillText("Selfie Cubes", w/2, h/2 - 10);
 
-    ctxInfo.font = "26px system-ui";
-    ctxInfo.fillStyle = "rgba(255,255,255,0.75)";
-    ctxInfo.fillText("by True Croo", w/2, h/2 + 26);
+    ctxInfo.font = "28px system-ui";
+    ctxInfo.fillStyle = "rgba(255,255,255,0.8)";
+    ctxInfo.fillText("by True Croo", w/2, h/2 + 34);
   }
 
-  // ===== Three setup (кастомный «орбит» + zoom-out) =====
+  // ===== Three setup =====
   function initThree(){
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0b0b);
@@ -473,7 +466,7 @@ $("#button_loader").on("click", async function(){
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
-    // ===== ТЕКСТУРЫ С КАНВАСОВ =====
+    // текстуры с канвасов
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
@@ -484,7 +477,7 @@ $("#button_loader").on("click", async function(){
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // КУБЫ с разными гранями
+    // кубы с разными гранями
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
       [
@@ -539,17 +532,21 @@ $("#button_loader").on("click", async function(){
       scene.add(c);
     });
 
-    // ===== ИНФО-БЛОК В СЦЕНЕ =====
-    drawInfoTexture();
+    // ===== ПЯТЫЙ БРЕНД-КУБ =====
+    drawInfoTexture();                              // рисуем текст
     texInfo = new THREE.CanvasTexture(info_canvas);
     const matInfo = new THREE.MeshBasicMaterial({
       map: texInfo,
       transparent: true
     });
-    const geoInfo = new THREE.PlaneGeometry(220, 110);
-    infoMesh = new THREE.Mesh(geoInfo, matInfo);
-    infoMesh.position.set(0, -220, -20);
-    scene.add(infoMesh);
+
+    // квадратный куб под бренд-текстуру
+    cube05 = new THREE.Mesh(
+      new THREE.BoxGeometry(90, 90, 90),
+      matInfo
+    );
+    cube05.position.set(0, -220, 0);
+    scene.add(cube05);
 
     window.addEventListener('resize', onResize);
 
@@ -591,27 +588,38 @@ $("#button_loader").on("click", async function(){
     camera.lookAt(0,0,0);
   }
 
+  // рандомное положение всех 5 кубов
   function changePosition(){
-    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
-    const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
-    do{
-      cube01.rotation.y  = rand(0.1,0.5);
-      cube02.rotation.y  = rand(0.1,0.5);
-      cube03.rotation.y  = rand(0.1,0.5);
-      cube04.rotation.y  = rand(0.1,0.5);
+    if (!cube01 || !cube02 || !cube03 || !cube04 || !cube05) return;
+
+    const cubes = [cube01, cube02, cube03, cube04, cube05];
+
+    const F = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+
+    let ok = false;
+    let guard = 0;
+    while(!ok && guard < 200) {
+      guard++;
+
+      cubes.forEach(c=>{
+        c.rotation.y = rand(0.1,0.5);
+      });
 
       cube01.position.set(rand(-55,55),  rand(-140,140), 0);
       cube02.position.set(rand(-50,50),  rand(-150,150), 0);
       cube03.position.set(rand(-50,50),  rand(-150,150), 0);
       cube04.position.set(rand(-45,45),  rand(-155,155), 0);
+      cube05.position.set(rand(-60,60),  rand(-170,170), 0);
 
-      d1=F(cube01.position,cube02.position);
-      d2=F(cube02.position,cube03.position);
-      d3=F(cube01.position,cube03.position);
-      d4=F(cube03.position,cube04.position);
-      d5=F(cube02.position,cube04.position);
-      d6=F(cube01.position,cube04.position);
-    } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
+      ok = true;
+      for (let i=0;i<cubes.length;i++){
+        for (let j=i+1;j<cubes.length;j++){
+          const d = F(cubes[i].position, cubes[j].position);
+          if (d < 100) { ok = false; break; }
+        }
+        if (!ok) break;
+      }
+    }
   }
 
   function onResize(){
@@ -700,7 +708,8 @@ $("#button_loader").on("click", async function(){
       drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
     }
 
-    [cube01, cube02, cube03, cube04].forEach(cube => {
+    // обновляем текстуры, включая бренд-куб
+    [cube01, cube02, cube03, cube04, cube05].forEach(cube => {
       if (cube && cube.material) {
         if (Array.isArray(cube.material)) {
           cube.material.forEach(mat => {
@@ -712,10 +721,9 @@ $("#button_loader").on("click", async function(){
       }
     });
 
-    // слегка крутим инфо-плашку для жизни
-    if (infoMesh) {
-      infoMesh.rotation.y += 0.003;
-      if (texInfo) texInfo.needsUpdate = false; // текст статичный
+    // чуть крутим бренд-куб для жизни
+    if (cube05) {
+      cube05.rotation.y += 0.004;
     }
 
     activeCamera.lookAt(0,0,0);
