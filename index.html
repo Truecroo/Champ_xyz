@@ -84,7 +84,7 @@
       font-size:13px;
     }
 
-    /* Упрощённый крупный бренд-лоадер */
+    /* Лоадер оставляем в DOM, но нигде не используем (только для будущего рендера) */
     #loading-screen {
       position:fixed; inset:0;
       display:none;
@@ -125,7 +125,7 @@
       width:120px;
       height:auto;
       z-index:15;
-      pointer-events:none; /* чтобы не мешал тачам/кликам */
+      pointer-events:none;
     }
 
     video {
@@ -142,7 +142,7 @@
 
 <body>
 
-  <!-- БРЕНД-ЛОАДЕР -->
+  <!-- Лоадер (сейчас не показывается) -->
   <div id="loading-screen" class="wrapper">
     <div class="loader-card">
       <img id="loading_logo" src="Loading_G.gif" alt="Загрузка…" class="loader-logo" />
@@ -220,10 +220,10 @@
   // ===== Three.js =====
   let scene, renderer;
   let camera, orthoCamera, activeCamera;
-  let cube01, cube02, cube03, cube04; // только 4 куба
+  let cube01, cube02, cube03, cube04; // нос, левый глаз, правый глаз, рот
   const FIXED_Z = 0;
 
-  // кастомный орбит
+  // кастомный орбит (камера стартует по оси Z, смотрим "в лоб")
   let radius = 600;
   let azimuth = 0;
   let polar = Math.PI/2;
@@ -241,21 +241,20 @@
     if (!renderer) return;
     const srcCanvas = renderer.domElement;
 
-    // создаём временный канвас под скрин
     const capture = document.createElement("canvas");
     capture.width  = srcCanvas.width;
     capture.height = srcCanvas.height;
     const cctx = capture.getContext("2d");
 
-    // 1) рисуем WebGL-сцену
+    // 1) сцена
     cctx.drawImage(srcCanvas, 0, 0);
 
-    // 2) поверх — бренд-оверлей справа сверху (чуть крупнее)
+    // 2) бренд-оверлей (увеличенный)
     if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
       const bw = brandBadge.naturalWidth || brandBadge.width;
       const bh = brandBadge.naturalHeight || brandBadge.height || bw;
 
-      const overlayW = capture.width * 0.20; // 20% ширины кадра
+      const overlayW = capture.width * 0.22;
       const overlayH = overlayW * (bh / bw);
       const ox = capture.width - overlayW - 40;
       const oy = 40;
@@ -311,11 +310,9 @@
   // ===== Кнопка «Продолжить» =====
   $("#button_loader").on("click", async function(){
     $("#permission-screen").fadeOut('slow');
-    $("#loading-screen").css('display','flex');
 
     const ok = await askCamera();
     if (!ok) {
-      $("#loading-screen").css('display','none');
       $("#permission-screen").show();
       return;
     }
@@ -328,8 +325,6 @@
     bootTrackers();
     changePosition();
     animate();
-
-    setTimeout(()=>$("#loading-screen").fadeOut('fast'), 1600);
   });
 
   // ===== Трекеры =====
@@ -463,52 +458,56 @@
     const matREye  = new THREE.MeshBasicMaterial({ map: texREye });
     const matMouth = new THREE.MeshBasicMaterial({ map: texMouth });
 
-    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]
+    // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]; фронт при камере по Z = -Z (index 5)
+    // cube01 — фронт: НОС
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
       [
-        matLEye,
-        matREye,
-        matMouth,
-        matNose,
-        matNose, // фронт — нос
-        matMouth
+        matLEye,   // +X
+        matREye,   // -X
+        matMouth,  // +Y
+        matMouth,  // -Y
+        matLEye,   // +Z
+        matNose    // -Z (фронт)
       ]
     );
 
+    // cube02 — фронт: ЛЕВЫЙ ГЛАЗ
     cube02 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
         matNose,
         matMouth,
         matREye,
-        matLEye,
-        matLEye, // фронт — левый глаз
-        matNose
+        matNose,
+        matMouth,
+        matLEye   // фронт
       ]
     );
 
+    // cube03 — фронт: ПРАВЫЙ ГЛАЗ
     cube03 = new THREE.Mesh(
       new THREE.BoxGeometry(60, 60, 60),
       [
         matMouth,
-        matLEye,
         matNose,
-        matREye,
-        matREye, // фронт — правый глаз
-        matMouth
+        matLEye,
+        matMouth,
+        matNose,
+        matREye   // фронт
       ]
     );
 
+    // cube04 — фронт: РОТ (горизонтальный прямоугольник к нам)
     cube04 = new THREE.Mesh(
       new THREE.BoxGeometry(120, 55, 55),
       [
         matREye,
+        matLEye,
+        matNose,
         matNose,
         matLEye,
-        matMouth,
-        matMouth, // фронт — рот
-        matLEye
+        matMouth  // фронт
       ]
     );
 
@@ -548,36 +547,67 @@
     }, {passive:true});
   }
 
+  // камера вокруг оси Y, стартуем на оси Z (в лоб)
   function updateCameraFromSpherical(){
     const sinP = Math.sin(polar), cosP = Math.cos(polar);
     const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
-    const x = radius * sinP * cosA;
+
+    const x = radius * sinP * sinA;
     const y = radius * cosP;
-    const z = radius * sinP * sinA;
+    const z = radius * sinP * cosA;
+
     if (camera) {
       camera.position.set(x,y,z);
       camera.lookAt(0,0,0);
     }
   }
 
-  // Рандомное положение 4 кубов — без вращения кубов, чтобы фронты были стабильны
+  // Рандом с вертикальной логикой:
+  // глаза — сверху, нос — центр, рот — снизу
   function changePosition(){
-    let d1=0,d2=0,d3=0,d4=0,d5=0,d6=0;
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+    let guard=0, ok=false;
 
-    do{
-      cube01.position.set(rand(-55,55),  rand(-140,140), 0);
-      cube02.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube03.position.set(rand(-50,50),  rand(-150,150), 0);
-      cube04.position.set(rand(-45,45),  rand(-155,155), 0);
+    while(!ok && guard<200){
+      guard++;
 
-      d1=F(cube01.position,cube02.position);
-      d2=F(cube02.position,cube03.position);
-      d3=F(cube01.position,cube03.position);
-      d4=F(cube03.position,cube04.position);
-      d5=F(cube02.position,cube04.position);
-      d6=F(cube01.position,cube04.position);
-    } while (d1<100 || d2<100 || d3<100 || d4<100 || d5<100 || d6<100);
+      // нос — центр
+      cube01.position.set(
+        rand(-40,40),   // x
+        rand(-20,40),   // y
+        0
+      );
+
+      // левый глаз — сверху слева
+      cube02.position.set(
+        rand(-90,-20),
+        rand(40,120),
+        0
+      );
+
+      // правый глаз — сверху справа
+      cube03.position.set(
+        rand(20,90),
+        rand(40,120),
+        0
+      );
+
+      // рот — внизу по центру
+      cube04.position.set(
+        rand(-60,60),
+        rand(-150,-70),
+        0
+      );
+
+      const p = [cube01.position,cube02.position,cube03.position,cube04.position];
+      ok = true;
+      for(let i=0;i<p.length;i++){
+        for(let j=i+1;j<p.length;j++){
+          if (F(p[i],p[j]) < 90) { ok=false; break; }
+        }
+        if(!ok) break;
+      }
+    }
   }
 
   function onResize(){
