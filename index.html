@@ -10,9 +10,8 @@
 
   <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Лоадеры для головы -->
+  <!-- Лоадер OBJ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/OBJLoader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/MTLLoader.js"></script>
 
   <!-- MediaPipe FaceMesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -228,7 +227,7 @@
   let headObject = null; // OBJ-голова
   const FIXED_Z = 0;
 
-  // кастомный орбит — как было, но стартуем на оси Z
+  // КАМЕРА: фиксированная орбита, без вращения
   let radius = 600;
   let azimuth = Math.PI / 2;   // чтобы изначально смотреть с +Z
   let polar = Math.PI/2;
@@ -534,6 +533,7 @@
 
     window.addEventListener('resize', onResize);
 
+    // Жесты: только для тапа (перемешивание), без вращения камеры
     document.addEventListener('pointerdown', e=>{
       dragging=true; moved=false; dragStartTime=Date.now();
       lastX=e.clientX; lastY=e.clientY;
@@ -544,14 +544,8 @@
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       if (Math.abs(dx)>2 || Math.abs(dy)>2) moved=true;
-
-      const ROT_SPEED = 0.005;
-      azimuth += dx * ROT_SPEED;
-      polar   -= dy * ROT_SPEED;
-      polar = Math.max(polarMin, Math.min(polarMax, polar));
-
+      // НЕ меняем azimuth/polar => орбит заблокирован
       lastX = e.clientX; lastY = e.clientY;
-      updateCameraFromSpherical();
     }, {passive:true});
 
     document.addEventListener('pointerup', e=>{
@@ -564,66 +558,45 @@
 
   // ===== Загрузка OBJ-головы =====
   function loadHeadModel(){
-    // сначала пробуем с MTL
     try {
-      const mtlLoader = new THREE.MTLLoader();
-      mtlLoader.setPath('./');
-      mtlLoader.load('head.mtl', function(materials){
-        materials.preload();
-        const objLoader = new THREE.OBJLoader();
-        objLoader.setMaterials(materials);
-        objLoader.setPath('./');
-        objLoader.load('head.obj', function(obj){
-          setupHeadObject(obj);
-        }, undefined, function(err){
-          console.warn('OBJ load error with MTL', err);
-        });
-      }, undefined, function(err){
-        console.warn('MTL load error, fallback to OBJ only', err);
-        loadHeadOBJFallback();
-      });
-    } catch(e){
-      console.warn('MTLLoader not available, fallback', e);
-      loadHeadOBJFallback();
-    }
-  }
+      const loader = new THREE.OBJLoader();
+      loader.setPath('./');              // head.obj в корне рядом с index.html
+      loader.load(
+        'head.obj',
+        function(obj){
+          headObject = obj;
+          headObject.traverse(function(child){
+            if (child.isMesh) {
+              // если материала нет — ставим нормал-материал, чтобы точно было видно
+              if (!child.material) {
+                child.material = new THREE.MeshNormalMaterial();
+              }
+              child.castShadow = false;
+              child.receiveShadow = false;
+            }
+          });
 
-  function loadHeadOBJFallback(){
-    try {
-      const objLoader = new THREE.OBJLoader();
-      objLoader.setPath('./');
-      objLoader.load('head.obj', function(obj){
-        setupHeadObject(obj);
-      }, undefined, function(err){
-        console.warn('OBJ load error', err);
-      });
+          // Позиция и размер головы — базовый пресет, можно тюнить
+          const HEAD_SCALE = 90;
+          const HEAD_Z = -140; // чуть позади кубов
+          const HEAD_Y = -10;
+
+          headObject.scale.set(HEAD_SCALE, HEAD_SCALE, HEAD_SCALE);
+          headObject.position.set(0, HEAD_Y, HEAD_Z);
+
+          scene.add(headObject);
+        },
+        undefined,
+        function(err){
+          console.warn('OBJ load error', err);
+        }
+      );
     } catch(e){
       console.warn('OBJLoader error', e);
     }
   }
 
-  function setupHeadObject(obj){
-    headObject = obj;
-    headObject.traverse(function(child){
-      if (child.isMesh) {
-        child.castShadow = false;
-        child.receiveShadow = false;
-      }
-    });
-
-    // Позиция и размер головы — можно тюнить под свой OBJ
-    const HEAD_SCALE = 90;       // общий масштаб
-    const HEAD_Z = -140;         // немного позади кубов
-    const HEAD_Y = -10;          // лёгкий сдвиг по высоте
-
-    headObject.scale.set(HEAD_SCALE, HEAD_SCALE, HEAD_SCALE);
-    headObject.position.set(0, HEAD_Y, HEAD_Z);
-
-    scene.add(headObject);
-  }
-
-  // Старая формула камеры (как тебе нравилось),
-  // но с azimuth = PI/2 она стартует с оси +Z
+  // фиксированная камера
   function updateCameraFromSpherical(){
     const sinP = Math.sin(polar), cosP = Math.cos(polar);
     const sinA = Math.sin(azimuth), cosA = Math.cos(azimuth);
