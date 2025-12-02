@@ -474,7 +474,7 @@
 
     // cube01 — фронт: НОС (оставляем размер)
     cube01 = new THREE.Mesh(
-      new THREE.BoxGeometry(50, 65, 50),
+      new THREE.BoxGeometry(60, 75, 60),
       [
         matLEye,   // +X
         matREye,   // -X
@@ -487,7 +487,7 @@
 
     // cube02 — ЛЕВЫЙ ГЛАЗ (уменьшен)
     cube02 = new THREE.Mesh(
-      new THREE.BoxGeometry(32, 32, 32),
+      new THREE.BoxGeometry(40, 40, 40),
       [
         matNose,   // +X
         matMouth,  // -X
@@ -500,7 +500,7 @@
 
     // cube03 — ПРАВЫЙ ГЛАЗ (уменьшен)
     cube03 = new THREE.Mesh(
-      new THREE.BoxGeometry(32, 32, 32),
+      new THREE.BoxGeometry(40, 40, 40),
       [
         matMouth,  // +X
         matNose,   // -X
@@ -513,7 +513,7 @@
 
     // cube04 — РОТ (более компактный прямоугольник)
     cube04 = new THREE.Mesh(
-      new THREE.BoxGeometry(70, 30, 30),
+      new THREE.BoxGeometry(80, 40, 40),
       [
         matREye,   // +X
         matLEye,   // -X
@@ -524,11 +524,13 @@
       ]
     );
 
-    [cube01, cube02, cube03, cube04].forEach(c=>{
-      c.rotation.set(0,0,0);
-      c.position.z = FIXED_Z;
-      scene.add(c);
-    });
+  const baseRotY = THREE.Math.degToRad(10);
+
+[cube01, cube02, cube03, cube04].forEach(c=>{
+  c.rotation.set(0, baseRotY, 0); // было (0,0,0)
+  c.position.z = FIXED_Z;
+  scene.add(c);
+});
 
     // грузим OBJ-голову (фон)
     loadHeadModel();
@@ -630,47 +632,47 @@
 
   // Рандом с вертикальной логикой:
   // глаза — сверху, нос — центр, рот — снизу, ближе к голове
- function changePosition(){
+function changePosition(){
   const F = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
-  let guard = 0, ok = false;
+  let guard=0, ok=false;
 
-  while(!ok && guard < 200){
+  while(!ok && guard<200){
     guard++;
 
-    // Нос — почти центр головы
+    // НОС — чуть выше и левее центра
     cube01.position.set(
-      rand(-10, 10),   // X
-      rand(-5, 15),    // Y
+      rand(-30, 10),   // было примерно (-20,20), сдвиг влево
+      rand(5, 25),     // было (-5,15), сдвиг вверх
       FIXED_Z
     );
 
-    // Левый глаз — сверху слева, ближе к середине
+    // ЛЕВЫЙ ГЛАЗ — выше и левее
     cube02.position.set(
-      rand(-45, -25),  // X
-      rand(35, 60),    // Y
+      rand(-90, -20),  // было (-80,-10)
+      rand(55, 135),   // было (40,120)
       FIXED_Z
     );
 
-    // Правый глаз — сверху справа
+    // ПРАВЫЙ ГЛАЗ — выше и левее
     cube03.position.set(
-      rand(25, 45),    // X
-      rand(35, 60),    // Y
+      rand(0, 70),     // было (10,80)
+      rand(55, 135),   // было (40,120)
       FIXED_Z
     );
 
-    // Рот — снизу по центру
+    // РОТ — выше и левее
     cube04.position.set(
-      rand(-30, 30),   // X
-      rand(-80, -55),  // Y
+      rand(-60, 40),   // было (-50,50)
+      rand(-110, -30), // было (-120,-40) -> ближе к нулю = выше
       FIXED_Z
     );
 
-    const p = [cube01.position, cube02.position, cube03.position, cube04.position];
+    const p = [cube01.position,cube02.position,cube03.position,cube04.position];
     ok = true;
     for(let i=0;i<p.length;i++){
       for(let j=i+1;j<p.length;j++){
-        if (F(p[i], p[j]) < 70) { // можно меньше, кубы уменьшились
-          ok = false;
+        if (F(p[i],p[j]) < 70) { // кубы уже меньше, 70 хватает
+          ok=false;
           break;
         }
       }
@@ -678,6 +680,7 @@
     }
   }
 }
+
 
 
   function onResize(){
