@@ -225,7 +225,9 @@
   let camera, orthoCamera, activeCamera;
   let cube01, cube02, cube03, cube04;
   let headObject = null; // OBJ-голова
-  const FIXED_Z = 0;
+
+  // кубы теперь ближе к голове
+  const FIXED_Z = -110;
 
   // КАМЕРА: фиксированная орбита, без вращения
   let radius = 600;
@@ -452,8 +454,8 @@
     );
     activeCamera = camera;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
@@ -470,7 +472,7 @@
     // порядок граней: [ +X, -X, +Y, -Y, +Z, -Z ]
     // фронт при старте — +Z (index 4), камера на +Z, смотрит в центр
 
-    // cube01 — фронт: НОС
+    // cube01 — фронт: НОС (оставляем размер)
     cube01 = new THREE.Mesh(
       new THREE.BoxGeometry(70, 90, 70),
       [
@@ -483,9 +485,9 @@
       ]
     );
 
-    // cube02 — фронт: ЛЕВЫЙ ГЛАЗ
+    // cube02 — ЛЕВЫЙ ГЛАЗ (уменьшен)
     cube02 = new THREE.Mesh(
-      new THREE.BoxGeometry(60, 60, 60),
+      new THREE.BoxGeometry(45, 45, 45),
       [
         matNose,   // +X
         matMouth,  // -X
@@ -496,9 +498,9 @@
       ]
     );
 
-    // cube03 — фронт: ПРАВЫЙ ГЛАЗ
+    // cube03 — ПРАВЫЙ ГЛАЗ (уменьшен)
     cube03 = new THREE.Mesh(
-      new THREE.BoxGeometry(60, 60, 60),
+      new THREE.BoxGeometry(45, 45, 45),
       [
         matMouth,  // +X
         matNose,   // -X
@@ -509,9 +511,9 @@
       ]
     );
 
-    // cube04 — фронт: РОТ (горизонтальный прямоугольник к нам)
+    // cube04 — РОТ (более компактный прямоугольник)
     cube04 = new THREE.Mesh(
-      new THREE.BoxGeometry(120, 55, 55),
+      new THREE.BoxGeometry(95, 40, 40),
       [
         matREye,   // +X
         matLEye,   // -X
@@ -579,7 +581,7 @@
   function setupHeadObject(obj){
     headObject = obj;
 
-    // нормализуем геометрию: центрируем и ставим материал
+    // нормализуем геометрию: центрируем и ставим серый материал
     headObject.traverse(function(child){
       if (child.isMesh) {
         if (child.geometry && child.geometry.center) {
@@ -587,8 +589,8 @@
           child.geometry.center();
         }
         child.material = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          metalness: 0.1,
+          color: 0xcccccc,   // серая голова
+          metalness: 0.05,
           roughness: 0.9
         });
         child.castShadow = false;
@@ -596,18 +598,19 @@
       }
     });
 
-    // считаем размер и масштабируем под высоту ~320 единиц (под наши кубы)
+    // считаем размер и масштабируем под высоту ~420 единиц (крупнее)
     const box = new THREE.Box3().setFromObject(headObject);
     const size = new THREE.Vector3();
     box.getSize(size);
 
     if (size.y > 0) {
-      const targetHeight = 320;
+      const targetHeight = 420;
       const s = targetHeight / size.y;
       headObject.scale.set(s, s, s);
     }
 
-    headObject.position.set(0, 0, -160); // чуть позади кубов
+    // чуть дальше по Z, чтобы кубы были в метафорическом "слое кожи"
+    headObject.position.set(0, 0, -180);
 
     scene.add(headObject);
   }
@@ -626,7 +629,7 @@
   }
 
   // Рандом с вертикальной логикой:
-  // глаза — сверху, нос — центр, рот — снизу
+  // глаза — сверху, нос — центр, рот — снизу, ближе к голове
   function changePosition(){
     const F=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
     let guard=0, ok=false;
@@ -636,30 +639,30 @@
 
       // нос — центр
       cube01.position.set(
-        rand(-40,40),
-        rand(-20,40),
-        0
+        rand(-20,20),
+        rand(-10,30),
+        FIXED_Z
       );
 
       // левый глаз — сверху слева
       cube02.position.set(
-        rand(-90,-20),
+        rand(-80,-10),
         rand(40,120),
-        0
+        FIXED_Z
       );
 
       // правый глаз — сверху справа
       cube03.position.set(
-        rand(20,90),
+        rand(10,80),
         rand(40,120),
-        0
+        FIXED_Z
       );
 
       // рот — внизу по центру
       cube04.position.set(
-        rand(-60,60),
-        rand(-150,-70),
-        0
+        rand(-50,50),
+        rand(-120,-40),
+        FIXED_Z
       );
 
       const p = [cube01.position,cube02.position,cube03.position,cube04.position];
