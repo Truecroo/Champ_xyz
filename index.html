@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>БЛЭСТ-селфи</title>
+  <title>Куб-селфи</title>
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
   <!-- jQuery -->
@@ -10,6 +10,9 @@
 
   <!-- THREE.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Лоадеры для головы -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/MTLLoader.js"></script>
 
   <!-- MediaPipe FaceMesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -178,14 +181,13 @@
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">Тап — перемешать кубы <br />
-    Свайп — менять угол камеры</div>
+  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
 
   <div id="about">
     <div id="aboutText">
-      <p class="explain"><b>БЛЭСТ СЭЛФИ</b> — Собираемся, чтобы найти твой лучший ракурс.</p>
+      <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
       <p class="credits">
-        Created by БЛЭСТ СТАФФ с помощью:
+        Технологии:
         <a href="https://threejs.org/">Three.js</a>,
         <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>,
         <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
@@ -223,6 +225,7 @@
   let scene, renderer;
   let camera, orthoCamera, activeCamera;
   let cube01, cube02, cube03, cube04;
+  let headObject = null; // OBJ-голова
   const FIXED_Z = 0;
 
   // кастомный орбит — как было, но стартуем на оси Z
@@ -526,6 +529,9 @@
       scene.add(c);
     });
 
+    // грузим OBJ-голову (фон)
+    loadHeadModel();
+
     window.addEventListener('resize', onResize);
 
     document.addEventListener('pointerdown', e=>{
@@ -554,6 +560,66 @@
       dragging=false;
       if (tap) onTap(e);
     }, {passive:true});
+  }
+
+  // ===== Загрузка OBJ-головы =====
+  function loadHeadModel(){
+    // сначала пробуем с MTL
+    try {
+      const mtlLoader = new THREE.MTLLoader();
+      mtlLoader.setPath('./');
+      mtlLoader.load('head.mtl', function(materials){
+        materials.preload();
+        const objLoader = new THREE.OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.setPath('./');
+        objLoader.load('head.obj', function(obj){
+          setupHeadObject(obj);
+        }, undefined, function(err){
+          console.warn('OBJ load error with MTL', err);
+        });
+      }, undefined, function(err){
+        console.warn('MTL load error, fallback to OBJ only', err);
+        loadHeadOBJFallback();
+      });
+    } catch(e){
+      console.warn('MTLLoader not available, fallback', e);
+      loadHeadOBJFallback();
+    }
+  }
+
+  function loadHeadOBJFallback(){
+    try {
+      const objLoader = new THREE.OBJLoader();
+      objLoader.setPath('./');
+      objLoader.load('head.obj', function(obj){
+        setupHeadObject(obj);
+      }, undefined, function(err){
+        console.warn('OBJ load error', err);
+      });
+    } catch(e){
+      console.warn('OBJLoader error', e);
+    }
+  }
+
+  function setupHeadObject(obj){
+    headObject = obj;
+    headObject.traverse(function(child){
+      if (child.isMesh) {
+        child.castShadow = false;
+        child.receiveShadow = false;
+      }
+    });
+
+    // Позиция и размер головы — можно тюнить под свой OBJ
+    const HEAD_SCALE = 90;       // общий масштаб
+    const HEAD_Z = -140;         // немного позади кубов
+    const HEAD_Y = -10;          // лёгкий сдвиг по высоте
+
+    headObject.scale.set(HEAD_SCALE, HEAD_SCALE, HEAD_SCALE);
+    headObject.position.set(0, HEAD_Y, HEAD_Z);
+
+    scene.add(headObject);
   }
 
   // Старая формула камеры (как тебе нравилось),
@@ -588,14 +654,14 @@
 
       // левый глаз — сверху слева
       cube02.position.set(
-        rand(90,20),
+        rand(-90,-20),
         rand(40,120),
         0
       );
 
       // правый глаз — сверху справа
       cube03.position.set(
-        rand(-20,-90),
+        rand(20,90),
         rand(40,120),
         0
       );
