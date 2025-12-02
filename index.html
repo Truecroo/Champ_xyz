@@ -474,7 +474,7 @@
 
     // cube01 — фронт: НОС (оставляем размер)
     cube01 = new THREE.Mesh(
-      new THREE.BoxGeometry(60, 75, 60),
+      new THREE.BoxGeometry(55, 70, 55),
       [
         matLEye,   // +X
         matREye,   // -X
@@ -487,7 +487,7 @@
 
     // cube02 — ЛЕВЫЙ ГЛАЗ (уменьшен)
     cube02 = new THREE.Mesh(
-      new THREE.BoxGeometry(40, 40, 40),
+      new THREE.BoxGeometry(45, 45, 45),
       [
         matNose,   // +X
         matMouth,  // -X
@@ -500,7 +500,7 @@
 
     // cube03 — ПРАВЫЙ ГЛАЗ (уменьшен)
     cube03 = new THREE.Mesh(
-      new THREE.BoxGeometry(40, 40, 40),
+      new THREE.BoxGeometry(45, 45, 45),
       [
         matMouth,  // +X
         matNose,   // -X
@@ -524,7 +524,7 @@
       ]
     );
 
-  const baseRotY = THREE.Math.degToRad(10);
+  const baseRotY = THREE.Math.degToRad(6);
 
 [cube01, cube02, cube03, cube04].forEach(c=>{
   c.rotation.set(0, baseRotY, 0); // было (0,0,0)
@@ -663,7 +663,7 @@ function changePosition(){
     // РОТ — выше и левее
     cube04.position.set(
       rand(-60, 40),   // было (-50,50)
-      rand(-110, -30), // было (-120,-40) -> ближе к нулю = выше
+      rand(-90, -20), // было (-120,-40) -> ближе к нулю = выше
       FIXED_Z
     );
 
