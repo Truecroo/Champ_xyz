@@ -1,0 +1,12 @@
+# Blender 4.5.1 LTS MTL File: 'финал анимация 4 штуки подвижные быстрые.blend'
+# www.blender.org
+
+newmtl Concrete_Wall.002
+Ns 10.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Ks -s 4 4 4 concrete wall spec AO bump.jpg
