@@ -648,21 +648,21 @@ function changePosition(){
 
     // ЛЕВЫЙ ГЛАЗ — выше и левее
     cube02.position.set(
-      rand(30, 30),  // было (-80,-10)
+      rand(0, 30),  // было (-80,-10)
       rand(55, 105),   // было (40,120)
       FIXED_Z
     );
 
     // ПРАВЫЙ ГЛАЗ — выше и левее
     cube03.position.set(
-      rand(-50, -50),     // было (10,80)
+      rand(-50, -10),     // было (10,80)
       rand(55, 105),   // было (40,120)
       FIXED_Z
     );
 
     // РОТ — выше и левее
     cube04.position.set(
-      rand(-60, 40),   // было (-50,50)
+      rand(-60, 20),   // было (-50,50)
       rand(-60, 0), // было (-120,-40) -> ближе к нулю = выше
       FIXED_Z
     );
@@ -762,7 +762,7 @@ function drawCrop(dstCtx, b, dw, dh, zoom){
 
     const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
    if (hasLM) {
-  drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);                 // общий zoom 1.2
+  drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height, 0.9);                 // общий zoom 1.2
   drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);                 // общий zoom 1.2
   drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);                // общий zoom 1.2
   drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height, 1.5); // рот дальше
