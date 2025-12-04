@@ -603,29 +603,38 @@
 
   headObject.traverse(function(child){
     if (child.isMesh) {
+      // центрируем геометрию
       if (child.geometry && child.geometry.center) {
         child.geometry.computeBoundingBox();
         child.geometry.center();
       }
+
+      // насильно даём нормальный серый материал,
+      // вообще не надеемся на head.mtl
       child.material = new THREE.MeshStandardMaterial({
-        color: 0xcccccc,
+        color: 0x777777,  // серый, не белый
         metalness: 0.05,
         roughness: 0.9
       });
+
+      child.castShadow = false;
+      child.receiveShadow = false;
     }
   });
 
+  // масштаб головы как раньше (если у тебя другая цифра — оставь свою)
   const box = new THREE.Box3().setFromObject(headObject);
   const size = new THREE.Vector3();
   box.getSize(size);
 
   if (size.y > 0) {
-    const targetHeight = 550; // или сколько у тебя тут стоит
+    const targetHeight = 550; // или твоя текущая высота
     const s = targetHeight / size.y;
     headObject.scale.set(s, s, s);
   }
 
-  headObject.position.set(0, 0, -700); // или твой Z
+  // ВСЕГДА так:
+  headObject.position.set(0, 0, -700);
 
   scene.add(headObject);
 }
