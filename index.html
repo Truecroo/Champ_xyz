@@ -487,7 +487,7 @@
 
     // cube02 — ЛЕВЫЙ ГЛАЗ (уменьшен)
     cube02 = new THREE.Mesh(
-      new THREE.BoxGeometry(55, 55, 55),
+      new THREE.BoxGeometry(50, 50, 50),
       [
         matNose,   // +X
         matMouth,  // -X
@@ -500,7 +500,7 @@
 
     // cube03 — ПРАВЫЙ ГЛАЗ (уменьшен)
     cube03 = new THREE.Mesh(
-      new THREE.BoxGeometry(55, 55, 55),
+      new THREE.BoxGeometry(50, 50, 50),
       [
         matMouth,  // +X
         matNose,   // -X
@@ -513,7 +513,7 @@
 
     // cube04 — РОТ (более компактный прямоугольник)
     cube04 = new THREE.Mesh(
-      new THREE.BoxGeometry(100, 40, 40),
+      new THREE.BoxGeometry(100, 35, 35),
       [
         matREye,   // +X
         matLEye,   // -X
@@ -726,52 +726,53 @@ function changePosition(){
       );
     } catch(e){}
   }
-
-  function drawCrop(dstCtx, b, dw, dh){
-    if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
-      drawFull(dstCtx, dw, dh);
-      return;
-    }
-
-    const vw = video.videoWidth || video.width || 480;
-    const vh = video.videoHeight || video.height || 640;
-
-    const ZOOM_OUT = 1.3;
-
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-
-    let sw = b.w * ZOOM_OUT;
-    let sh = b.h * ZOOM_OUT;
-
-    let sx = cx - sw / 2;
-    let sy = cy - sh / 2;
-
-    sx = clamp(sx, 0, vw - 1);
-    sy = clamp(sy, 0, vh - 1);
-    sw = clamp(sw, 1, vw - sx);
-    sh = clamp(sh, 1, vh - sy);
-
-    try {
-      dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-    } catch(e){}
+function drawCrop(dstCtx, b, dw, dh, zoom){
+  if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y)) {
+    drawFull(dstCtx, dw, dh);
+    return;
   }
+
+  const vw = video.videoWidth || video.width || 480;
+  const vh = video.videoHeight || video.height || 640;
+
+  const ZOOM_OUT = zoom || 1.3; // по умолчанию как было
+
+  const cx = b.x + b.w / 2;
+  const cy = b.y + b.h / 2;
+
+  let sw = b.w * ZOOM_OUT;
+  let sh = b.h * ZOOM_OUT;
+
+  let sx = cx - sw / 2;
+  let sy = cy - sh / 2;
+
+  sx = clamp(sx, 0, vw - 1);
+  sy = clamp(sy, 0, vh - 1);
+  sw = clamp(sw, 1, vw - sx);
+  sh = clamp(sh, 1, vh - sy);
+
+  try {
+    dstCtx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+  } catch(e){}
+}
+
 
   function animate(){
     requestAnimationFrame(animate);
 
     const hasLM = (_bbNose || _bbLEye || _bbREye || _bbMouth);
-    if (hasLM) {
-      drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);
-      drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);
-      drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);
-      drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height);
-    } else {
-      drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
-      drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
-      drawFull(ctxREye,  right_canvas.width, right_canvas.height);
-      drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
-    }
+   if (hasLM) {
+  drawCrop(ctxNose,  _bbNose,  nose_canvas.width,  nose_canvas.height);                 // общий zoom 1.2
+  drawCrop(ctxLEye,  _bbLEye,  left_canvas.width,  left_canvas.height);                 // общий zoom 1.2
+  drawCrop(ctxREye,  _bbREye,  right_canvas.width, right_canvas.height);                // общий zoom 1.2
+  drawCrop(ctxMouth, _bbMouth, mouth_canvas.width, mouth_canvas.height, 1.5); // рот дальше
+} else {
+  drawFull(ctxNose,  nose_canvas.width,  nose_canvas.height);
+  drawFull(ctxLEye,  left_canvas.width,  left_canvas.height);
+  drawFull(ctxREye,  right_canvas.width, right_canvas.height);
+  drawFull(ctxMouth, mouth_canvas.width, mouth_canvas.height);
+}
+
 
     [cube01, cube02, cube03, cube04].forEach(cube => {
       if (cube && cube.material) {
