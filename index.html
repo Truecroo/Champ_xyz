@@ -185,9 +185,9 @@
 
   <div id="about">
     <div id="aboutText">
-      <p class="explain"><b>БЛЭСТ-ФЭЙС.</b> Created by БЛЭСТ ПРОД.</p>
+      <p class="explain"><b>Придумано и сдеано БЛЭСТ ПРОД.</b> </p>
       <p class="credits">
-        Технологии:
+        С помощью технологий:
         <a href="https://threejs.org/">Three.js</a>,
         <a href="https://developers.google.com/mediapipe/solutions/vision/face_mesh">MediaPipe FaceMesh</a>,
         <a href="https://learn.ml5js.org/#/reference/posenet">ml5 PoseNet</a>
@@ -669,24 +669,24 @@ function changePosition(){
       FIXED_Z
     );
 
-    // ЛЕВЫЙ ГЛАЗ — выше и левее
+    // ЛЕВЫЙ ГЛАЗ — твои координаты
     cube02.position.set(
-      rand(55, 20),   // левее
-      rand(70, 105),    // выше
+      rand(55, 20),     // как ты дал (функция rand у нас работает и с перевернутыми границами)
+      rand(70, 105),
       FIXED_Z
     );
 
-    // ПРАВЫЙ ГЛАЗ — выше и правее
+    // ПРАВЫЙ ГЛАЗ — твои координаты
     cube03.position.set(
-      rand(-20, -55),     // правее
-      rand(70, 105),    // выше
+      rand(-20, -55),
+      rand(70, 105),
       FIXED_Z
     );
 
-    // РОТ — ниже носа, но ближе к центру
+    // РОТ — твои координаты
     cube04.position.set(
-      rand(-35, 35),    // по центру
-      rand(-55, -25),   // заметно выше чем раньше
+      rand(-35, 35),
+      rand(-55, -25),
       FIXED_Z
     );
 
@@ -694,7 +694,7 @@ function changePosition(){
     ok = true;
     for(let i=0;i<p.length;i++){
       for(let j=i+1;j<p.length;j++){
-        if (F(p[i], p[j]) < 85) {   // было 70 — увеличили запас
+        if (F(p[i], p[j]) < 85) {   // запас по дистанции, чтобы не налезали
           ok = false;
           break;
         }
@@ -702,6 +702,12 @@ function changePosition(){
       if(!ok) break;
     }
   }
+
+  // базовые Y для флотинга
+  cube01.userData.baseY = cube01.position.y;
+  cube02.userData.baseY = cube02.position.y;
+  cube03.userData.baseY = cube03.position.y;
+  cube04.userData.baseY = cube04.position.y;
 }
 
 
@@ -810,6 +816,28 @@ function drawCrop(dstCtx, b, dw, dh, zoom){
       }
     });
 
+  const t = performance.now() * 0.001; // секунды
+
+  // лёгкий флотинг по Y (амплитуда 5–7)
+  if (cube01 && cube01.userData.baseY !== undefined) {
+    cube01.position.y = cube01.userData.baseY + Math.sin(t * 0.8 + 0.0) * 6;
+  }
+  if (cube02 && cube02.userData.baseY !== undefined) {
+    cube02.position.y = cube02.userData.baseY + Math.sin(t * 0.9 + 1.3) * 5;
+  }
+  if (cube03 && cube03.userData.baseY !== undefined) {
+    cube03.position.y = cube03.userData.baseY + Math.sin(t * 1.0 + 2.1) * 5;
+  }
+  if (cube04 && cube04.userData.baseY !== undefined) {
+    cube04.position.y = cube04.userData.baseY + Math.sin(t * 0.7 + 3.4) * 7;
+  }
+
+  if (activeCamera && renderer && scene) {
+    activeCamera.lookAt(0,0,0);
+    renderer.render(scene, activeCamera);
+  }
+
+    
     if (activeCamera && renderer && scene) {
       activeCamera.lookAt(0,0,0);
       renderer.render(scene, activeCamera);
