@@ -634,45 +634,45 @@
   // глаза — сверху, нос — центр, рот — снизу, ближе к голове
 function changePosition(){
   const F = (a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
-  let guard=0, ok=false;
+  let guard = 0, ok = false;
 
-  while(!ok && guard<200){
+  while(!ok && guard < 200){
     guard++;
 
-    // НОС — чуть выше и левее центра
+    // НОС — центр
     cube01.position.set(
-      rand(-10, 10),   // было примерно (-20,20), сдвиг влево
-      rand(5, 25),     // было (-5,15), сдвиг вверх
+      rand(-12, 12),    // X около центра
+      rand(10, 28),     // немного выше центра
       FIXED_Z
     );
 
     // ЛЕВЫЙ ГЛАЗ — выше и левее
     cube02.position.set(
-      rand(0, 30),  // было (-80,-10)
-      rand(55, 105),   // было (40,120)
+      rand(-55, -20),   // левее
+      rand(70, 105),    // выше
       FIXED_Z
     );
 
-    // ПРАВЫЙ ГЛАЗ — выше и левее
+    // ПРАВЫЙ ГЛАЗ — выше и правее
     cube03.position.set(
-      rand(-50, -10),     // было (10,80)
-      rand(55, 105),   // было (40,120)
+      rand(20, 55),     // правее
+      rand(70, 105),    // выше
       FIXED_Z
     );
 
-    // РОТ — выше и левее
+    // РОТ — ниже носа, но ближе к центру
     cube04.position.set(
-      rand(-60, 20),   // было (-50,50)
-      rand(-60, 0), // было (-120,-40) -> ближе к нулю = выше
+      rand(-35, 35),    // по центру
+      rand(-55, -25),   // заметно выше чем раньше
       FIXED_Z
     );
 
-    const p = [cube01.position,cube02.position,cube03.position,cube04.position];
+    const p = [cube01.position, cube02.position, cube03.position, cube04.position];
     ok = true;
     for(let i=0;i<p.length;i++){
       for(let j=i+1;j<p.length;j++){
-        if (F(p[i],p[j]) < 70) { // кубы уже меньше, 70 хватает
-          ok=false;
+        if (F(p[i], p[j]) < 85) {   // было 70 — увеличили запас
+          ok = false;
           break;
         }
       }
@@ -680,6 +680,7 @@ function changePosition(){
     }
   }
 }
+
 
 
 
