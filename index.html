@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Куб-селфи</title>
+  <title>БЛЭСТ-селфи</title>
   <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
   <!-- jQuery -->
@@ -12,6 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <!-- OBJLoader из examples под r128 -->
   <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/MTLLoader.js"></script>
 
   <!-- MediaPipe FaceMesh -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -149,7 +150,7 @@
   <div id="loading-screen" class="wrapper">
     <div class="loader-card">
       <img id="loading_logo" src="Loading_G.gif" alt="Загрузка…" class="loader-logo" />
-      <div class="loader-text-main">Расставляем кубы…</div>
+      <div class="loader-text-main">Собираем кубы…</div>
       <div class="loader-text-sub">Подключаем камеру и трекаем лицо</div>
     </div>
   </div>
@@ -180,11 +181,11 @@
   <!-- Скрытое видео -->
   <video autoplay muted playsinline id="video" width="480" height="640"></video>
 
-  <div id="discription">тап — перемешать кубы • двигай пальцем — менять угол камеры</div>
+  <div id="discription">тап — перемешать кубы</div>
 
   <div id="about">
     <div id="aboutText">
-      <p class="explain"><b>Куб-селфи</b> — 3D + детекция лица. Управляй перспективой и находи лучший ракурс.</p>
+      <p class="explain"><b>БЛЭСТ-ФЭЙС.</b> Created by БЛЭСТ ПРОД.</p>
       <p class="credits">
         Технологии:
         <a href="https://threejs.org/">Three.js</a>,
@@ -561,61 +562,74 @@
   }
 
   // ===== Загрузка OBJ-головы =====
-  function loadHeadModel(){
-    try {
-      const loader = new THREE.OBJLoader();
-      loader.setPath('./');              // head.obj в корне рядом с index.html
-      loader.load(
-        'head.obj',
-        function(obj){
-          setupHeadObject(obj);
-        },
-        undefined,
-        function(err){
-          console.warn('OBJ load error', err);
-        }
-      );
-    } catch(e){
-      console.warn('OBJLoader error', e);
-    }
+ function loadHeadModel(){
+  try {
+    const mtlLoader = new THREE.MTLLoader();
+    mtlLoader.setPath('./');            // head.mtl в корне
+
+    mtlLoader.load(
+      'head.mtl',
+      function(materials){
+        materials.preload();
+
+        const objLoader = new THREE.OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.setPath('./');        // head.obj там же
+
+        objLoader.load(
+          'head.obj',
+          function(obj){
+            setupHeadObject(obj);
+          },
+          undefined,
+          function(err){
+            console.warn('OBJ load error', err);
+          }
+        );
+      },
+      undefined,
+      function(err){
+        console.warn('MTL load error', err);
+      }
+    );
+  } catch(e){
+    console.warn('MTL/OBJ loader error', e);
   }
+}
+
 
   function setupHeadObject(obj){
-    headObject = obj;
+  headObject = obj;
 
-    // нормализуем геометрию: центрируем и ставим серый материал
-    headObject.traverse(function(child){
-      if (child.isMesh) {
-        if (child.geometry && child.geometry.center) {
-          child.geometry.computeBoundingBox();
-          child.geometry.center();
-        }
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0xcccccc,   // серая голова
-          metalness: 0.05,
-          roughness: 0.9
-        });
-        child.castShadow = false;
-        child.receiveShadow = false;
+  headObject.traverse(function(child){
+    if (child.isMesh) {
+      if (child.geometry && child.geometry.center) {
+        child.geometry.computeBoundingBox();
+        child.geometry.center();
       }
-    });
-
-    // считаем размер и масштабируем под высоту ~420 единиц (крупнее)
-    const box = new THREE.Box3().setFromObject(headObject);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-
-    if (size.y > 0) {
-      const targetHeight = 550;
-      const s = targetHeight / size.y;
-      headObject.scale.set(s, s, s);
+      child.material = new THREE.MeshStandardMaterial({
+        color: 0xcccccc,
+        metalness: 0.05,
+        roughness: 0.9
+      });
     }
+  });
 
-    // чуть дальше по Z, чтобы кубы были в метафорическом "слое кожи"
-    headObject.position.set(0, 0, -700);
+  const box = new THREE.Box3().setFromObject(headObject);
+  const size = new THREE.Vector3();
+  box.getSize(size);
 
-    scene.add(headObject);
+  if (size.y > 0) {
+    const targetHeight = 550; // или сколько у тебя тут стоит
+    const s = targetHeight / size.y;
+    headObject.scale.set(s, s, s);
   }
+
+  headObject.position.set(0, 0, -220); // или твой Z
+
+  scene.add(headObject);
+}
+
 
   // фиксированная камера
   function updateCameraFromSpherical(){
