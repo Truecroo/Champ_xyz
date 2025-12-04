@@ -648,14 +648,14 @@ function changePosition(){
 
     // ЛЕВЫЙ ГЛАЗ — выше и левее
     cube02.position.set(
-      rand(120, 120),  // было (-80,-10)
+      rand(-120, -120),  // было (-80,-10)
       rand(55, 105),   // было (40,120)
       FIXED_Z
     );
 
     // ПРАВЫЙ ГЛАЗ — выше и левее
     cube03.position.set(
-      rand(50, 50),     // было (10,80)
+      rand(-50, -50),     // было (10,80)
       rand(55, 105),   // было (40,120)
       FIXED_Z
     );
@@ -736,7 +736,7 @@ function changePosition(){
     const vw = video.videoWidth || video.width || 480;
     const vh = video.videoHeight || video.height || 640;
 
-    const ZOOM_OUT = 1.2;
+    const ZOOM_OUT = 1.3;
 
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
