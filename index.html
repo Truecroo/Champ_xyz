@@ -473,8 +473,8 @@
       });
 
    // подгон под 1920x1080 (16:9), но поменьше и подальше
-const BG_W = 1150;                          // было 1600
-const BG_H = BG_W * 1080 / 1920;            // ~648
+const BG_W = 1080;                          // было 1600
+const BG_H = 1920;            // ~648
 
 const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
 bgPlane = new THREE.Mesh(bgGeo, bgMat);
