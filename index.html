@@ -226,6 +226,8 @@
   let camera, orthoCamera, activeCamera;
   let cube01, cube02, cube03, cube04;
   let headObject = null; // OBJ-голова
+  let bgPlane = null; // фон-плейн с текстом за головой
+
 
   // кубы теперь ближе к голове
   const FIXED_Z = -140;
@@ -460,6 +462,31 @@
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
+    // ==== ПЛОСКОСТЬ С ТЕКСТОМ ЗА ГОЛОВОЙ ====
+    const texLoader = new THREE.TextureLoader();
+    texLoader.load('bg-text.png', function(tex){
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+      const bgMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,   // если PNG с альфой
+        depthWrite: true,
+        depthTest: true
+      });
+
+      // Подбери размер под свой макет
+      const bgGeo = new THREE.PlaneGeometry(900, 500); // ширина/высота в условных единицах сцены
+
+      bgPlane = new THREE.Mesh(bgGeo, bgMat);
+
+      // Центр по X/Y, и ЗА головой:
+      // кубы ~ -140, голова -700, фон ещё дальше
+      bgPlane.position.set(0, 0, -1000);
+
+      scene.add(bgPlane);
+    });
+
+    
     const texNose  = new THREE.CanvasTexture(nose_canvas);
     const texLEye  = new THREE.CanvasTexture(left_canvas);
     const texREye  = new THREE.CanvasTexture(right_canvas);
