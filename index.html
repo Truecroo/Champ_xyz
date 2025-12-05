@@ -475,16 +475,17 @@
       });
 
       // Подбери размер под свой макет
-      const bgGeo = new THREE.PlaneGeometry(900, 500); // ширина/высота в условных единицах сцены
+   // подгон под 1920x1080 (16:9)
+const BG_W = 1600;
+const BG_H = BG_W * 1080 / 1920; // 900
 
-      bgPlane = new THREE.Mesh(bgGeo, bgMat);
+const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
+bgPlane = new THREE.Mesh(bgGeo, bgMat);
 
-      // Центр по X/Y, и ЗА головой:
-      // кубы ~ -140, голова -700, фон ещё дальше
-      bgPlane.position.set(0, 0, -1000);
+// чуть ближе и по центру за головой
+bgPlane.position.set(0, 0, -1000); // было -1000
+scene.add(bgPlane);
 
-      scene.add(bgPlane);
-    });
 
     
     const texNose  = new THREE.CanvasTexture(nose_canvas);
