@@ -472,16 +472,18 @@
         depthTest: true
       });
 
-      // подгон под 1920x1080 (16:9)
-      const BG_W = 1600;
-      const BG_H = BG_W * 1080 / 1920; // 900
+   // подгон под 1920x1080 (16:9), но поменьше и подальше
+const BG_W = 1150;                          // было 1600
+const BG_H = BG_W * 1080 / 1920;            // ~648
 
-      const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
-      bgPlane = new THREE.Mesh(bgGeo, bgMat);
+const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
+bgPlane = new THREE.Mesh(bgGeo, bgMat);
 
-      // по центру за головой
-      bgPlane.position.set(0, 0, -1000);
-      scene.add(bgPlane);
+// чуть выше и дальше за головой — меньше перспективных искажений
+bgPlane.position.set(0, 40, -1350);         // было (0, 0, -1000)
+
+scene.add(bgPlane);
+
     });
 
     // текстуры с канвасов
