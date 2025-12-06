@@ -633,11 +633,12 @@ scene.add(bgPlane);
         }
 
         // жёстко серый материал, не надеемся на mtl
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0x777777,
-          metalness: 0.05,
-          roughness: 0.9
-        });
+       child.material = new THREE.MeshStandardMaterial({
+  color: headColor, // ← вместо 0x777777
+  metalness: 0.05,
+  roughness: 0.9
+});
+
 
         child.castShadow = false;
         child.receiveShadow = false;
@@ -658,6 +659,14 @@ scene.add(bgPlane);
     scene.add(headObject);
   }
 
+// один случайный цвет головы на сессию
+const headColor = new THREE.Color().setHSL(
+  Math.random(), // рандомный тон
+  0.35,          // насыщенность
+  0.65           // светлота
+);
+
+  
   // фиксированная камера
   function updateCameraFromSpherical(){
     const sinP = Math.sin(polar), cosP = Math.cos(polar);
