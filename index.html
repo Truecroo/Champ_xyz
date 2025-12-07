@@ -259,25 +259,30 @@ $("#download").on("click", function(){
   // 1) сцена
   cctx.drawImage(srcCanvas, 0, 0);
 
-  // 2) бренд-оверлей (увеличенный)
+  // 2) бренд-оверлей
   if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
     const bw = brandBadge.naturalWidth || brandBadge.width;
     const bh = brandBadge.naturalHeight || brandBadge.height || bw;
 
-    // базовый размер — половина ширины кадра
-    let overlayW = capture.width * 0.45;
+    // ширина — ~35% кадра (ты можешь поменять)
+    let overlayW = capture.width * 0.35;
     let overlayH = overlayW * (bh / bw);
 
-    // ограничение по высоте: максимум 25% кадра
-    const maxH = capture.height * 0.25;
+    // ограничение по высоте: не больше 20% кадра
+    const maxH = capture.height * 0.20;
     if (overlayH > maxH) {
       overlayH = maxH;
       overlayW = overlayH * (bw / bh);
     }
 
-    // центр по X, снизу по Y
+    // центр по X
     const ox = (capture.width - overlayW) / 2;
-    const oy = capture.height - overlayH;
+
+    // НИЖЕ ЗАМЕТНО:
+    // вместо "прямо у края" ставим так,
+    // чтобы нижняя часть уходила ЗА пределы кадра
+    const oy = capture.height - overlayH + 40; 
+    // ↑ хочешь ещё ниже — увеличивай 40, например 80, 120 и т.д.
 
     try {
       cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
@@ -291,6 +296,7 @@ $("#download").on("click", function(){
   link.target = "_blank";
   link.click();
 });
+
 
   $("#aboutButton").on("click", function(){
     $("#aboutText").fadeToggle('fast');
