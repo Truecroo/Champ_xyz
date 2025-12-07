@@ -126,7 +126,7 @@
   left:50%;
   bottom:16px;        /* было top:12px / right:12px */
   transform:translateX(-50%);
-  width:160px;        /* можешь подредачить под свой новый размер */
+  width:1000px;        /* можешь подредачить под свой новый размер */
   height:auto;
   z-index:15;
   pointer-events:none;
@@ -261,7 +261,7 @@
 
     // 2) бренд-оверлей (увеличенный)
     if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
-    const overlayW = capture.width * 0.22;         // если новый PNG крупный — можешь коэффициент уменьшить/увеличить
+const overlayW = Math.min(capture.width * 1.1, capture.width * 0.9);       // если новый PNG крупный — можешь коэффициент уменьшить/увеличить
 const overlayH = overlayW * (bh / bw);
 
 // центр по X, снизу по Y
