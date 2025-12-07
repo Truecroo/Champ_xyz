@@ -121,17 +121,18 @@
     }
 
     /* Статичный бренд-PNG — только с 3D-сценой */
-   #brandBadge {
+#brandBadge {
   position:fixed;
   left:50%;
-  bottom:16px;        /* было top:12px / right:12px */
+  bottom:12px;          /* было 16px — чуть ниже к краю */
   transform:translateX(-50%);
-  width:450px;        /* можешь подредачить под свой новый размер */
+  width:320px;          /* было 450px — минус ~30% */
   height:auto;
   z-index:15;
   pointer-events:none;
   display:none;
 }
+
 
 
     video {
@@ -264,7 +265,7 @@ $("#download").on("click", function(){
     const bh = brandBadge.naturalHeight || brandBadge.height || bw;
 
     // базовый размер — половина ширины кадра
-    let overlayW = capture.width * 0.5;
+    let overlayW = capture.width * 0.35;
     let overlayH = overlayW * (bh / bw);
 
     // ограничение по высоте: максимум 25% кадра
@@ -276,7 +277,7 @@ $("#download").on("click", function(){
 
     // центр по X, снизу по Y
     const ox = (capture.width - overlayW) / 2;
-    const oy = capture.height - overlayH - 40;
+    const oy = capture.height - overlayH - 20;
 
     try {
       cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
