@@ -121,15 +121,18 @@
     }
 
     /* Статичный бренд-PNG — только с 3D-сценой */
-    #brandBadge {
-      position:fixed;
-      right:12px;
-      top:12px;
-      width:120px;
-      height:auto;
-      z-index:15;
-      pointer-events:none;
-      display:none;
+   #brandBadge {
+  position:fixed;
+  left:50%;
+  bottom:16px;        /* было top:12px / right:12px */
+  transform:translateX(-50%);
+  width:160px;        /* можешь подредачить под свой новый размер */
+  height:auto;
+  z-index:15;
+  pointer-events:none;
+  display:none;
+}
+
     }
 
     video {
@@ -258,17 +261,16 @@
 
     // 2) бренд-оверлей (увеличенный)
     if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
-      const bw = brandBadge.naturalWidth || brandBadge.width;
-      const bh = brandBadge.naturalHeight || brandBadge.height || bw;
+    const overlayW = capture.width * 0.22;         // если новый PNG крупный — можешь коэффициент уменьшить/увеличить
+const overlayH = overlayW * (bh / bw);
 
-      const overlayW = capture.width * 0.22;
-      const overlayH = overlayW * (bh / bw);
-      const ox = capture.width - overlayW - 40;
-      const oy = 40;
+// центр по X, снизу по Y
+const ox = (capture.width - overlayW) / 2;
+const oy = capture.height - overlayH - 40;     // отступ снизу, можешь менять
 
-      try {
-        cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
-      } catch(e){}
+try {
+  cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
+} catch(e){}
     }
 
     const dataURL = capture.toDataURL("image/png");
