@@ -124,14 +124,15 @@
 #brandBadge {
   position:fixed;
   left:50%;
-  bottom:12px;          /* было 16px — чуть ниже к краю */
+  bottom:4px;       /* опустить/поднять — крути эту цифру */
   transform:translateX(-50%);
-  width:400px;          /* было 450px — минус ~30% */
+  width:400px;      /* размер в лайве и на PNG один и тот же */
   height:auto;
   z-index:15;
   pointer-events:none;
   display:none;
 }
+
 
 
 
@@ -249,46 +250,39 @@
   // ===== UI =====
 $("#download").on("click", function(){
   if (!renderer) return;
-  const srcCanvas = renderer.domElement;
 
+  const srcCanvas = renderer.domElement;
+  const canvasRect = srcCanvas.getBoundingClientRect();
+
+  // канвас под скрин — ровно в CSS-размере, как на экране
   const capture = document.createElement("canvas");
-  capture.width  = srcCanvas.width;
-  capture.height = srcCanvas.height;
+  capture.width  = canvasRect.width;
+  capture.height = canvasRect.height;
   const cctx = capture.getContext("2d");
 
-  // 1) сцена
-  cctx.drawImage(srcCanvas, 0, 0);
+  // 1) рисуем 3D-сцену, растянув WebGL-канвас под эти размеры
+  cctx.drawImage(
+    srcCanvas,
+    0, 0, srcCanvas.width, srcCanvas.height, // from
+    0, 0, canvasRect.width, canvasRect.height // to
+  );
 
-  // 2) бренд-оверлей
+  // 2) поверх рисуем бренд-бейдж ровно там же, где он в DOM
   if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
-    const bw = brandBadge.naturalWidth || brandBadge.width;
-    const bh = brandBadge.naturalHeight || brandBadge.height || bw;
+    const badgeRect = brandBadge.getBoundingClientRect();
 
-    // ширина — ~35% кадра (ты можешь поменять)
-    let overlayW = capture.width * 0.35;
-    let overlayH = overlayW * (bh / bw);
-
-    // ограничение по высоте: не больше 20% кадра
-    const maxH = capture.height * 0.20;
-    if (overlayH > maxH) {
-      overlayH = maxH;
-      overlayW = overlayH * (bw / bh);
-    }
-
-    // центр по X
-    const ox = (capture.width - overlayW) / 2;
-
-    // НИЖЕ ЗАМЕТНО:
-    // вместо "прямо у края" ставим так,
-    // чтобы нижняя часть уходила ЗА пределы кадра
-    const oy = capture.height - overlayH + 40; 
-    // ↑ хочешь ещё ниже — увеличивай 40, например 80, 120 и т.д.
+    // координаты относительно канваса
+    const ox = badgeRect.left - canvasRect.left;
+    const oy = badgeRect.top  - canvasRect.top;
+    const overlayW = badgeRect.width;
+    const overlayH = badgeRect.height;
 
     try {
       cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
     } catch(e){}
   }
 
+  // 3) скачиваем PNG
   const dataURL = capture.toDataURL("image/png");
   const link = document.createElement("a");
   link.download = "selfie.png";
@@ -296,6 +290,7 @@ $("#download").on("click", function(){
   link.target = "_blank";
   link.click();
 });
+
 
 
   $("#aboutButton").on("click", function(){
