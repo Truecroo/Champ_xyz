@@ -277,7 +277,7 @@ $("#download").on("click", function(){
 
     // центр по X, снизу по Y
     const ox = (capture.width - overlayW) / 2;
-    const oy = capture.height - overlayH - 10;
+    const oy = capture.height - overlayH;
 
     try {
       cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
