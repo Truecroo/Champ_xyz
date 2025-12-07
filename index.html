@@ -133,7 +133,6 @@
   display:none;
 }
 
-    }
 
     video {
       opacity:0;
@@ -247,47 +246,50 @@
   let noseX=0, noseY=0, leX=0, leY=0, reX=0, reY=0, mX=0, mY=0;
 
   // ===== UI =====
-  $("#download").on("click", function(){
-    if (!renderer) return;
-    const srcCanvas = renderer.domElement;
+$("#download").on("click", function(){
+  if (!renderer) return;
+  const srcCanvas = renderer.domElement;
 
-    const capture = document.createElement("canvas");
-    capture.width  = srcCanvas.width;
-    capture.height = srcCanvas.height;
-    const cctx = capture.getContext("2d");
+  const capture = document.createElement("canvas");
+  capture.width  = srcCanvas.width;
+  capture.height = srcCanvas.height;
+  const cctx = capture.getContext("2d");
 
-    // 1) сцена
-    cctx.drawImage(srcCanvas, 0, 0);
+  // 1) сцена
+  cctx.drawImage(srcCanvas, 0, 0);
 
-    // 2) бренд-оверлей (увеличенный)
-// хотим большой, но не больше 25% высоты кадра
-const bw = brandBadge.naturalWidth || brandBadge.width;
-const bh = brandBadge.naturalHeight || brandBadge.height || bw;
+  // 2) бренд-оверлей (увеличенный)
+  if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
+    const bw = brandBadge.naturalWidth || brandBadge.width;
+    const bh = brandBadge.naturalHeight || brandBadge.height || bw;
 
-// базовый размер — половина ширины кадра
-let overlayW = capture.width * 0.5;
-let overlayH = overlayW * (bh / bw);
+    // базовый размер — половина ширины кадра
+    let overlayW = capture.width * 0.5;
+    let overlayH = overlayW * (bh / bw);
 
-// ограничение по высоте: максимум 25% кадра
-const maxH = capture.height * 0.25;
-if (overlayH > maxH) {
-  overlayH = maxH;
-  overlayW = overlayH * (bw / bh);
-}
-
-// центр по X, снизу по Y
-const ox = (capture.width - overlayW) / 2;
-const oy = capture.height - overlayH - 40;
-
-try {
-  cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
-} catch(e){}
+    // ограничение по высоте: максимум 25% кадра
+    const maxH = capture.height * 0.25;
+    if (overlayH > maxH) {
+      overlayH = maxH;
+      overlayW = overlayH * (bw / bh);
     }
 
-    const dataURL = capture.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = "selfie.png"; link.href = dataURL; link.target = "_blank"; link.click();
-  });
+    // центр по X, снизу по Y
+    const ox = (capture.width - overlayW) / 2;
+    const oy = capture.height - overlayH - 40;
+
+    try {
+      cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
+    } catch(e){}
+  }
+
+  const dataURL = capture.toDataURL("image/png");
+  const link = document.createElement("a");
+  link.download = "selfie.png";
+  link.href = dataURL;
+  link.target = "_blank";
+  link.click();
+});
 
   $("#aboutButton").on("click", function(){
     $("#aboutText").fadeToggle('fast');
