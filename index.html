@@ -126,7 +126,7 @@
   left:50%;
   bottom:16px;        /* было top:12px / right:12px */
   transform:translateX(-50%);
-  width:1000px;        /* можешь подредачить под свой новый размер */
+  width:450px;        /* можешь подредачить под свой новый размер */
   height:auto;
   z-index:15;
   pointer-events:none;
@@ -260,13 +260,24 @@
     cctx.drawImage(srcCanvas, 0, 0);
 
     // 2) бренд-оверлей (увеличенный)
-    if (brandBadge && (brandBadge.naturalWidth || brandBadge.width)) {
-const overlayW = Math.min(capture.width * 1.1, capture.width * 0.9);       // если новый PNG крупный — можешь коэффициент уменьшить/увеличить
-const overlayH = overlayW * (bh / bw);
+// хотим большой, но не больше 25% высоты кадра
+const bw = brandBadge.naturalWidth || brandBadge.width;
+const bh = brandBadge.naturalHeight || brandBadge.height || bw;
+
+// базовый размер — половина ширины кадра
+let overlayW = capture.width * 0.5;
+let overlayH = overlayW * (bh / bw);
+
+// ограничение по высоте: максимум 25% кадра
+const maxH = capture.height * 0.25;
+if (overlayH > maxH) {
+  overlayH = maxH;
+  overlayW = overlayH * (bw / bh);
+}
 
 // центр по X, снизу по Y
 const ox = (capture.width - overlayW) / 2;
-const oy = capture.height - overlayH - 40;     // отступ снизу, можешь менять
+const oy = capture.height - overlayH - 40;
 
 try {
   cctx.drawImage(brandBadge, ox, oy, overlayW, overlayH);
