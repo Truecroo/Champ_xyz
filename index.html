@@ -477,31 +477,56 @@ $("#download").on("click", function(){
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
-    // ==== ПЛОСКОСТЬ С ТЕКСТОМ ЗА ГОЛОВОЙ ====
-    const texLoader = new THREE.TextureLoader();
-    texLoader.load('bg-text.png', function(tex){
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-      const bgMat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        depthWrite: true,
-        depthTest: true
-      });
+  // ==== ПЛОСКОСТЬ С ТЕКСТОМ ЗА ГОЛОВОЙ (рандомный BG) ====
+const texLoader = new THREE.TextureLoader();
 
-   // подгон под 1920x1080 (16:9), но поменьше и подальше
-const BG_W = 700;                          // было 1600
-const BG_H = 1244;            // ~648
+// сюда вписать свои варианты файлов
+const BG_IMAGES = [
+  'bg-text-1.png',
+  'bg-text-2.png',
+  'bg-text-3.png'
+];
 
-const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
-bgPlane = new THREE.Mesh(bgGeo, bgMat);
+function createBgPlane(tex) {
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-// чуть выше и дальше за головой — меньше перспективных искажений
-bgPlane.position.set(0, 40, -1350);         // было (0, 0, -1000)
+  const bgMat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: true,
+    depthTest: true
+  });
 
-scene.add(bgPlane);
+  const BG_W = 700;   // как было
+  const BG_H = 1244;  // как было
 
+  const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
+  bgPlane = new THREE.Mesh(bgGeo, bgMat);
+  bgPlane.position.set(0, 40, -1350);
+  scene.add(bgPlane);
+}
+
+// выбираем случайный файл
+const idx = Math.floor(Math.random() * BG_IMAGES.length);
+const bgFile = BG_IMAGES[idx];
+
+// грузим бэк
+texLoader.load(
+  bgFile,
+  function(tex){
+    createBgPlane(tex);
+  },
+  undefined,
+  function(err){
+    console.warn('BG load error:', err);
+    // запасной вариант — старый единый файл, если что-то упало
+    texLoader.load('bg-text.png', function(fallbackTex){
+      createBgPlane(fallbackTex);
     });
+  }
+);
+
 
     // текстуры с канвасов
     const texNose  = new THREE.CanvasTexture(nose_canvas);
