@@ -481,56 +481,50 @@ $("#download").on("click", function(){
     dir.position.set(300, 400, 500);
     scene.add(dir);
 
+    // ==== ПЛОСКОСТЬ С ТЕКСТОМ ЗА ГОЛОВОЙ (рандомный BG) ====
+    const texLoader = new THREE.TextureLoader();
 
-  // ==== ПЛОСКОСТЬ С ТЕКСТОМ ЗА ГОЛОВОЙ (рандомный BG) ====
-const texLoader = new THREE.TextureLoader();
+    const BG_FILES = [
+      'bg-text-1.png',
+      'bg-text-2.png',
+      'bg-text-3.png',
+      'bg-text-4.png'
+    ];
 
-// сюда вписать свои варианты файлов
-const BG_IMAGES = [
-  'bg-text-1.png',
-  'bg-text-2.png',
-  'bg-text-3.png',
-  'bg-text-4.png'
-];
+    const chosenBg = BG_FILES[Math.floor(Math.random() * BG_FILES.length)];
 
-function createBgPlane(tex) {
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    texLoader.load(
+      chosenBg,
+      function (tex) {
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-  const bgMat = new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    depthWrite: true,
-    depthTest: true
-  });
+        const bgMat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          depthWrite: true,
+          depthTest: true
+        });
 
-  const BG_W = 700;   // как было
-  const BG_H = 1244;  // как было
+        // нормальные пропорции по реальному размеру картинки
+        const imgW = tex.image.width  || 1920;
+        const imgH = tex.image.height || 1080;
+        const imgAspect = imgW / imgH;
 
-  const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
-  bgPlane = new THREE.Mesh(bgGeo, bgMat);
-  bgPlane.position.set(0, 40, -1350);
-  scene.add(bgPlane);
-}
+        const BG_H = 700;              // высота «дуги» (можешь крутить)
+        const BG_W = BG_H * imgAspect; // ширина под неё
 
-// выбираем случайный файл
-const idx = Math.floor(Math.random() * BG_IMAGES.length);
-const bgFile = BG_IMAGES[idx];
+        const bgGeo = new THREE.PlaneGeometry(BG_W, BG_H);
+        bgPlane = new THREE.Mesh(bgGeo, bgMat);
 
-// грузим бэк
-texLoader.load(
-  bgFile,
-  function(tex){
-    createBgPlane(tex);
-  },
-  undefined,
-  function(err){
-    console.warn('BG load error:', err);
-    // запасной вариант — старый единый файл, если что-то упало
-    texLoader.load('bg-text.png', function(fallbackTex){
-      createBgPlane(fallbackTex);
-    });
-  }
-);
+        bgPlane.position.set(0, 40, -1350); // как было — за головой
+        scene.add(bgPlane);
+      },
+      undefined,
+      function (err) {
+        console.warn('BG load error:', err);
+      }
+    );
+
 
 
     // текстуры с канвасов
