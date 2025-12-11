@@ -239,7 +239,7 @@
   const FIXED_Z = -140; // кубы ближе к камере
 
   // КАМЕРА: фиксированная орбита, без вращения
-  let radius = 600;
+  let radius = 670;
   let azimuth = Math.PI / 2;   // камера на +Z
   let polar = Math.PI/2;
   const polarMin = Math.PI/6;
@@ -697,7 +697,7 @@ texLoader.load(
     box.getSize(size);
 
     if (size.y > 0) {
-      const targetHeight = 670;
+      const targetHeight = 540;
       const s = targetHeight / size.y;
       headObject.scale.set(s, s, s);
     }
